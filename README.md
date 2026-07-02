@@ -446,3 +446,79 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 - **Projetos diferentes exigem adaptação** — a Fase 3 de um projeto já parcialmente organizado não vai ter as mesmas transformações de um monolito. Sua skill deve se adaptar ao contexto.
 - **Pedir confirmação na Fase 2 é obrigatório** — o humano deve revisar o relatório antes de qualquer modificação.
 - **Consulte as referências do curso** — revise a documentação oficial da ferramenta escolhida e os materiais das aulas para relembrar a estrutura e anatomia de uma skill.
+
+---
+
+# 📋 Entrega do Desafio
+
+> A partir daqui começa a documentação da solução. As seções acima são o enunciado original do desafio.
+
+## Análise Manual
+
+Análise manual dos 3 projetos legados. Para cada projeto foram identificados os problemas de maior impacto arquitetural, classificados por severidade (CRITICAL / HIGH / MEDIUM / LOW). A explicação didática detalhada de **cada** achado — com trecho de código, causa e correção — está em [explicacao_problemas_encontrados.md](explicacao_problemas_encontrados.md).
+
+### Projeto 1 — `code-smells-project` (Python/Flask — API de E-commerce)
+
+Monolito com pastas nomeadas como camadas (`controllers`, `models`), mas sem separação real de responsabilidades.
+
+| # | Severidade | Problema | Localização |
+|---|---|---|---|
+| 1 | **CRITICAL** | SQL Injection generalizado (queries montadas por concatenação de strings) | `models.py` (28, 48-49, 110, 291, ...) |
+| 2 | **CRITICAL** | Endpoint que executa SQL arbitrário do cliente + reset de banco sem auth | `app.py:59-78`, `app.py:47-57` |
+| 3 | **CRITICAL** | `SECRET_KEY` hardcoded e exposta na resposta do `/health` | `app.py:7`, `controllers.py:289` |
+| 4 | **CRITICAL** | Senhas em texto puro (armazenadas, comparadas e retornadas ao cliente) | `models.py:110,127-128,83`; `database.py:76-78` |
+| 5 | **HIGH** | Conexão de banco global mutável compartilhada entre threads | `database.py:4-11` |
+| 6 | **HIGH** | Regra de negócio (estoque/total) dentro da camada de dados (`criar_pedido`) | `models.py:133-169` |
+| 7 | **HIGH** | Efeitos colaterais (e-mail/SMS/push via `print`) dentro do controller | `controllers.py:208-210,248-250` |
+| 8 | **MEDIUM** | Problema N+1 na listagem de pedidos | `models.py:171-201,203-233` |
+| 9 | **MEDIUM** | Validação duplicada entre criar e atualizar produto | `controllers.py:24-96` |
+| 10 | **MEDIUM** | `DEBUG=True` fixo + `host=0.0.0.0` (Werkzeug debugger exposto → RCE) | `app.py:8,88` |
+| 11 | **LOW** | Concatenação `+ str(...)` em vez de f-strings | `controllers.py` (diversos) |
+| 12 | **LOW** | Magic numbers e listas mágicas (categorias, status, faixas de desconto) | `controllers.py:47-52,242`; `models.py:257-262` |
+| 13 | **LOW** | `print` como log + `except Exception` genérico vazando detalhes | `controllers.py` (diversos) |
+
+### Projeto 2 — `ecommerce-api-legacy` (Node.js/Express — LMS API com checkout)
+
+"Frankenstein LMS": uma God Class (`AppManager`) com conexão, schema, seed, rotas e regra de negócio, tudo junto.
+
+| # | Severidade | Problema | Localização |
+|---|---|---|---|
+| 1 | **CRITICAL** | God Class concentrando DB, seed, rotas e regra de negócio | `AppManager.js:4-141` |
+| 2 | **CRITICAL** | Segredos de produção hardcoded (senha de DB, chave `pk_live` do gateway) | `utils.js:1-7` |
+| 3 | **CRITICAL** | Número de cartão e chave do gateway logados em texto puro (viola PCI-DSS) | `AppManager.js:45` |
+| 4 | **CRITICAL** | "Criptografia" caseira de senha (base64 truncado, sem salt) | `utils.js:17-23`; `AppManager.js:68` |
+| 5 | **HIGH** | Callback hell no checkout, sem transação (matrícula órfã se pagamento falha) | `AppManager.js:37-77` |
+| 6 | **HIGH** | Aprovação de pagamento fake baseada no prefixo do cartão | `AppManager.js:47` |
+| 7 | **HIGH** | Exclusão de usuário deixa matrículas/pagamentos órfãos | `AppManager.js:131-137` |
+| 8 | **MEDIUM** | Relatório financeiro com N+1 assíncrono e contadores manuais frágeis | `AppManager.js:80-129` |
+| 9 | **MEDIUM** | Nomes crípticos (`usr`, `eml`, `cc`) e ausência de validação de entrada | `AppManager.js:29-35` |
+| 10 | **LOW** | Estado global mutável exportado (`globalCache`, `totalRevenue`) e código morto | `utils.js:9-10,25` |
+| 11 | **LOW** | Banco `:memory:` perde todos os dados a cada restart | `AppManager.js:7` |
+
+### Projeto 3 — `task-manager-api` (Python/Flask — Task Manager)
+
+Já possui separação de camadas (`models/`, `routes/`, `services/`, `utils/`), mas com problemas de segurança, duplicação e regra de negócio no lugar errado.
+
+| # | Severidade | Problema | Localização |
+|---|---|---|---|
+| 1 | **CRITICAL** | Hash de senha com MD5 (algoritmo quebrado, sem salt) | `models/user.py:29,32` |
+| 2 | **CRITICAL** | Senha (hash) exposta no `to_dict()` e propagada em várias rotas | `models/user.py:16-25`; `user_routes.py:33,85,209` |
+| 3 | **CRITICAL** | Segredos hardcoded (`SECRET_KEY`, senha de SMTP) | `app.py:13`; `notification_service.py:9-10` |
+| 4 | **HIGH** | Autenticação fake (`fake-jwt-token-`) e nenhuma rota protegida | `user_routes.py:210`; rotas em geral |
+| 5 | **HIGH** | Regra de negócio `is_overdue` duplicada inline em 5+ lugares | `task_routes.py:30-39,71-80,284-287`; `user_routes.py:171-180`; `report_routes.py:34-37,132-135` |
+| 6 | **MEDIUM** | N+1 na listagem de tasks e nos relatórios (ignora relacionamentos mapeados) | `task_routes.py:41-57`; `report_routes.py:53-68` |
+| 7 | **MEDIUM** | Serialização de task duplicada (model `to_dict()` vs. rotas montando à mão) | `task.py:23-36`; `task_routes.py:16-59`; `user_routes.py:162-181` |
+| 8 | **MEDIUM** | Validação de task duplicada em 3 lugares (util `process_task_data` ignorado) | `task_routes.py:96-114,166-184`; `helpers.py:57-108` |
+| 9 | **LOW** | `except:` "pelado" engolindo e mascarando erros | `task_routes.py:62,236`; `helpers.py:46-50` |
+| 10 | **LOW** | Imports não usados e `print` como log | `app.py:7`; `task_routes.py:7,149,219`; `helpers.py:1-7` |
+| 11 | **LOW** | `type(x) == list` (em vez de `isinstance`) e `if/else` retornando booleano | `helpers.py:103`; `user.py:34-38`; `task.py:38-48` |
+
+### Resumo dos achados
+
+| Projeto | CRITICAL | HIGH | MEDIUM | LOW | Total |
+|---|---|---|---|---|---|
+| 1 — code-smells-project | 4 | 3 | 3 | 3 | 13 |
+| 2 — ecommerce-api-legacy | 4 | 3 | 2 | 2 | 11 |
+| 3 — task-manager-api | 3 | 2 | 3 | 3 | 11 |
+
+Todos os projetos atendem ao mínimo exigido pelo desafio: ≥ 5 problemas, sendo ≥ 1 CRITICAL/HIGH, ≥ 2 MEDIUM e ≥ 2 LOW.
