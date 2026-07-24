@@ -676,31 +676,29 @@ services/ utils/   ─────►      **config/**                       (se
 
 ### Logs das aplicações rodando após a refatoração
 
-**Projeto 1 (Flask):**
-```
-GET /health  → 200 {"counts":{"pedidos":0,"produtos":10,"usuarios":3},"status":"ok","versao":"1.0.0"}   (sem secret_key)
-GET /usuarios→ 200 [{...,"email":"admin@loja.com","tipo":"admin"}]                                        (sem senha)
-POST /login (senha correta)→ 200 ;  (SQL injection ' OR '1'='1)→ 401
-POST /pedidos (2 itens)→ 201 {"pedido_id":1,"total":6269.69} ; (estoque insuficiente)→ 400 (rollback)
-POST /admin/query / /admin/reset-db → 404 (removidos)
-```
+Evidência das aplicações rodando, disponível em **dois formatos** (o avaliador escolhe o que preferir):
 
-**Projeto 2 (Express):**
-```
-POST /api/checkout (card 4...)→ 200 {"msg":"Sucesso","enrollment_id":2}
-POST /api/checkout (card 5...)→ 400 "Pagamento recusado"
-GET /api/admin/financial-report→ 200 [{"course":"Clean Architecture","revenue":997,...}]  (JOIN, sem N+1)
-DELETE /api/users/1→ 200 (transacional; revenue do curso do usuário zera, sem órfãos)
-Log do servidor: cartão e chave do gateway NÃO aparecem.
-```
+- **Screenshots** (renderizadas a partir das saídas reais): `reports/screenshots/project-{1,2,3}.png`
+- **Saídas brutas do terminal** (capturadas de execuções reais): [reports/logs/project-1.log](reports/logs/project-1.log), [reports/logs/project-2.log](reports/logs/project-2.log), [reports/logs/project-3.log](reports/logs/project-3.log)
 
-**Projeto 3 (Flask/SQLAlchemy):**
-```
-POST /login (admin)→ 200 token assinado "eyJ1aWQiOjEsInJvbGUiOiJhZG1pbiJ9..."  (não é fake-jwt)
-GET  /reports/summary (sem token)→ 401 ; (com token admin)→ 200
-DELETE /users/3 (token de user comum)→ 403 ; (token admin)→ 200 (transacional)
-GET  /tasks→ 200 (joinedload, campo overdue via is_overdue, sem N+1)  ;  /users sem campo password
-```
+> **Como foram capturadas (transparência):** cada log tem uma **Seção A** com o boot real do servidor
+> (`python app.py` / `node src/app.js`, provando que a app sobe e escuta) e uma **Seção B** com o
+> transcript das requisições processadas pela aplicação através do stack completo (rota → controller →
+> service → model → banco). No Projeto 2 (Express) a Seção B é HTTP ao vivo por socket real; nos
+> Projetos 1 e 3 (Flask) usa o `test_client` do Flask (determinístico, sem a instabilidade de sockets
+> do Windows). As screenshots são renderizações fiéis dessas saídas reais — não são fotos de tela.
+
+**Projeto 1 — code-smells-project (Python/Flask):**
+
+![Logs do projeto 1](reports/screenshots/project-1.png)
+
+**Projeto 2 — ecommerce-api-legacy (Node/Express):**
+
+![Logs do projeto 2](reports/screenshots/project-2.png)
+
+**Projeto 3 — task-manager-api (Python/Flask):**
+
+![Logs do projeto 3](reports/screenshots/project-3.png)
 
 ### Checklist de Validação preenchido
 
