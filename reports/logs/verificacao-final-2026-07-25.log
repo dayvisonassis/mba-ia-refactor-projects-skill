@@ -1,11 +1,11 @@
 ================================================================
  VERIFICACAO FINAL DE ACEITE - 3 PROJETOS REFATORADOS
 ================================================================
-Data da execucao : 2026-07-25 07:58:58 -0300
+Data da execucao : 2026-07-25 12:13:09 -0300
 Sistema          : Windows 11 Pro
 Python           : Python 3.11.9
 Node             : v22.15.0
-Commit auditado  : d8ebce5
+Commit auditado  : c0b9b69
 ================================================================
 
 OBJETIVO
@@ -34,18 +34,18 @@ COMO LER ESTE LOG - LEIA ANTES DE CONCLUIR QUE ALGO FALHOU
   [PASS] GET    /produtos                              -> 200 (esperado 200) 
   [PASS] GET    /produtos/busca?q=note                 -> 200 (esperado 200) 
   [PASS] POST   /produtos                              -> 201 (esperado 201) 
-  [PASS] GET    /produtos/16                           -> 200 (esperado 200) 
-  [PASS] PUT    /produtos/16                           -> 200 (esperado 200) 
+  [PASS] GET    /produtos/17                           -> 200 (esperado 200) 
+  [PASS] PUT    /produtos/17                           -> 200 (esperado 200) 
   [PASS] GET    /usuarios                              -> 200 (esperado 200) 
   [PASS] POST   /usuarios                              -> 201 (esperado 201) 
-  [PASS] GET    /usuarios/10                           -> 200 (esperado 200) 
-  [PASS] POST   /login                                 -> 200 (esperado 200) (senha com hash salgado)
+  [PASS] GET    /usuarios/11                           -> 200 (esperado 200) 
+  [PASS] POST   /login                                 -> 200 (esperado 200) (senha com hash + salt)
   [PASS] POST   /pedidos                               -> 201 (esperado 201) 
   [PASS] GET    /pedidos                               -> 200 (esperado 200) 
-  [PASS] GET    /pedidos/usuario/10                    -> 200 (esperado 200) 
-  [PASS] PUT    /pedidos/4/status                      -> 200 (esperado 200) 
+  [PASS] GET    /pedidos/usuario/11                    -> 200 (esperado 200) 
+  [PASS] PUT    /pedidos/5/status                      -> 200 (esperado 200) 
   [PASS] GET    /relatorios/vendas                     -> 200 (esperado 200) 
-  [PASS] DELETE /produtos/16                           -> 200 (esperado 200/204) 
+  [PASS] DELETE /produtos/17                           -> 200 (esperado 200/204) 
 
 --- Seção C: endpoints removidos DE PROPÓSITO (eram a vulnerabilidade) ---
   [PASS] POST   /admin/query                           -> 404 (esperado 404/405) <- 404 é o resultado CORRETO: rota removida
@@ -67,11 +67,11 @@ RESULTADO PROJETO 1: 22/22 verificações PASS
 
 --- Seção B: contrato original (as 3 rotas declaradas em api.http) ---
   [PASS] POST   /api/checkout                    -> 200 (esperado 200) <- cartão aprovado
-         resposta: {"msg":"Sucesso","enrollment_id":7}
+         resposta: {"msg":"Sucesso","enrollment_id":8}
   [PASS] POST   /api/checkout                    -> 400 (esperado 400) <- 400 correto: pagamento recusado
          resposta: Pagamento recusado
   [PASS] GET    /api/admin/financial-report      -> 200 (esperado 200) <- relatório sem N+1
-         resposta: [{"course":"Clean Architecture","revenue":0,"students":[]},{"course":"Docker","revenue":2982,"students":[{"student":"Ana...
+         resposta: [{"course":"Clean Architecture","revenue":0,"students":[]},{"course":"Docker","revenue":3479,"students":[{"student":"Ana...
   [PASS] DELETE /api/users/1                     -> 200 (esperado 200) <- remove dependências (sem órfãos)
          resposta: {"msg":"Usuário e dependências (matrículas/pagamentos) removidos."}
 
