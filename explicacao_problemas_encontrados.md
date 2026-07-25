@@ -325,7 +325,7 @@ Este projeto **já tem** separação de camadas (`models/`, `routes/`, `services
 
 **Correção:** usar `process_task_data` (ou um schema) nas duas rotas; remover a duplicação.
 
-## 3.9 — [LOW] `except:` "pelado" engolindo erros
+## 3.9 — [LOW] `except:` sem tipo (*bare except*) engolindo erros
 **Onde:** `task_routes.py:62` (`except:` no `get_tasks`), `:236`; `helpers.py:46-50` (`parse_date` com `try/except:` aninhado); `report_routes`/`user_routes` com `except:` sem tipo.
 
 **Por que é um problema:** `except:` sem tipo captura **tudo**, inclusive `KeyboardInterrupt`/`SystemExit`, e mascara a causa real do erro (retorna "Erro interno" genérico sem log). Dificulta muito o debug.

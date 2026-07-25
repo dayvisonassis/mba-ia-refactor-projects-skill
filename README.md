@@ -550,7 +550,7 @@ Já possui separação de camadas (`models/`, `routes/`, `services/`, `utils/`),
 | 6 | **MEDIUM** | N+1 na listagem de tasks e nos relatórios (ignora relacionamentos mapeados) | `task_routes.py:41-57`; `report_routes.py:53-68` | Os relacionamentos SQLAlchemy já existem e são ignorados: o código dispara uma consulta por task, degradando o tempo de resposta conforme a base cresce. |
 | 7 | **MEDIUM** | Serialização de task duplicada (model `to_dict()` vs. rotas montando à mão) | `task.py:23-36`; `task_routes.py:16-59`; `user_routes.py:162-181` | O model já sabe se serializar, mas as rotas remontam o dicionário à mão — o mesmo recurso sai com formatos diferentes dependendo do endpoint. |
 | 8 | **MEDIUM** | Validação de task duplicada em 3 lugares (util `process_task_data` ignorado) | `task_routes.py:96-114,166-184`; `helpers.py:57-108` | O utilitário de validação existe e é ignorado por três rotas que revalidam à mão, com critérios que já não batem entre si. |
-| 9 | **LOW** | `except:` "pelado" engolindo e mascarando erros | `task_routes.py:62,236`; `helpers.py:46-50` | Captura até `KeyboardInterrupt` e `SystemExit`, e apaga a causa real do erro — a falha vira um comportamento estranho sem rastro para depurar. |
+| 9 | **LOW** | `except:` sem tipo (*bare except*) engolindo e mascarando erros | `task_routes.py:62,236`; `helpers.py:46-50` | Captura até `KeyboardInterrupt` e `SystemExit`, e apaga a causa real do erro — a falha vira um comportamento estranho sem rastro para depurar. |
 | 10 | **LOW** | Imports não usados e `print` como log | `app.py:7`; `task_routes.py:7,149,219`; `helpers.py:1-7` | Imports mortos enganam sobre as dependências reais do módulo; `print` não tem nível nem timestamp e some em produção. |
 | 11 | **LOW** | `type(x) == list` (em vez de `isinstance`) e `if/else` retornando booleano | `helpers.py:103`; `user.py:34-38`; `task.py:38-48` | `type(x) == list` falha para subclasses de `list`; devolver `True`/`False` num `if/else` é ruído onde bastaria retornar a própria expressão. |
 
@@ -589,8 +589,8 @@ Escolhas principais:
   auditoria e este README em **português**.
 - **Gate de confirmação obrigatório.** As Fases 1 e 2 são read-only; a Fase 3 só modifica arquivos após
   o humano digitar `y`. Isso está escrito explicitamente no `SKILL.md` e foi respeitado nas 3 execuções.
-- **Estratégia adaptativa** (ver seção C): monolito → scaffold MVC completo; projeto já em camadas →
-  correção pontual + camadas faltantes, sem reescrever o que já está bom.
+- **Estratégia adaptativa** (ver seção C): monolito → estrutura MVC completa criada do zero; projeto
+  já em camadas → correção pontual + camadas faltantes, sem reescrever o que já está bom.
 
 ### Anti-patterns incluídos e por quê
 
@@ -609,7 +609,7 @@ projetos-alvo (nada inventado):
 | AP-08 | N+1 queries | MEDIUM | Projetos 1, 2, 3 |
 | AP-09 | Validação/serialização duplicada | MEDIUM | Projetos 1, 3 |
 | AP-10 | Magic numbers / listas mágicas | LOW | Projetos 1, 2 |
-| AP-11 | `print`/`console.log` como log + `except` pelado | LOW | Projetos 1, 3 |
+| AP-11 | `print`/`console.log` como log + `except` sem tipo | LOW | Projetos 1, 3 |
 | AP-12 | Falta de transação / integridade referencial | HIGH | Projeto 2 |
 
 Além disso, uma seção dedicada a **APIs deprecated** cobre `hashlib.md5` para senha, `datetime.utcnow()`
@@ -622,9 +622,10 @@ cada um com o equivalente moderno recomendado.
 - A detecção parte de **sinais concretos** (arquivos de manifesto, imports, statements SQL), não de um
   projeto específico — Python/Flask e Node/Express estão cobertos explicitamente, mas as heurísticas
   generalizam.
-- O catálogo descreve os anti-patterns por **sinal greppável** independente de linguagem (ex.: "query
-  string montada com input"), e o playbook traz exemplos **em Python e em JS**.
-- As guidelines de arquitetura mapeam as mesmas camadas MVC para os dois stacks (blueprint Flask ==
+- O catálogo descreve os anti-patterns por **sinal localizável por busca textual** (`grep`), sem
+  depender da linguagem (ex.: "query string montada com entrada do usuário"), e o playbook traz
+  exemplos **em Python e em JS**.
+- As guidelines de arquitetura mapeiam as mesmas camadas MVC para os dois stacks (blueprint Flask ==
   router Express; `werkzeug.security` == scrypt/bcrypt; error handler do Flask == middleware de erro
   do Express).
 - Prova prática: a **mesma skill, copiada sem alteração**, rodou nos 3 projetos (2 Flask + 1 Express)
@@ -642,8 +643,9 @@ cada um com o equivalente moderno recomendado.
   claramente sinalizado como *stub* — corrige o acoplamento arquitetural (regra fora do controller) sem
   fingir uma cobrança real.
 - **Hash de senha sem dependência nova.** Em vez de instalar `bcrypt` (nativo, exige build no Windows),
-  usei `werkzeug.security` (Python, já vem com Flask) e `node:crypto` scrypt (Node, stdlib) — salgados e
-  fortes, zero instalação extra.
+  usei `werkzeug.security` (Python, já vem com Flask) e `node:crypto` scrypt (Node, stdlib). Os dois
+  geram um **salt** aleatório por senha e são deliberadamente lentos — que é o que se quer contra
+  força bruta — sem nenhuma instalação extra.
 - **Ambiente offline/proxy.** `pip` batia em erro de certificado (proxy corporativo); resolvido com
   `--trusted-host`. Validação HTTP no Windows sofria com esgotamento de sockets; usei o `test_client`
   do Flask e um cliente Node com keep-alive para exercitar todo o stack de forma determinística.
@@ -724,7 +726,7 @@ Contrato original: 19 rotas. **17 preservadas** + 2 removidas por serem a própr
 | PUT · DELETE | `/produtos/<id>` | 200 | preservada |
 | GET | `/usuarios` · `/usuarios/<id>` | 200 | preservada |
 | POST | `/usuarios` | 201 | preservada |
-| POST | `/login` | 200 | preservada (agora com hash salgado) |
+| POST | `/login` | 200 | preservada (agora com hash + salt) |
 | POST | `/pedidos` | 201 | preservada |
 | GET | `/pedidos` · `/pedidos/usuario/<id>` | 200 | preservada |
 | PUT | `/pedidos/<id>/status` | 200 | preservada |
@@ -775,7 +777,7 @@ criado por `seed.py`) e enviar `Authorization: Bearer <token>` nas rotas protegi
   inclusive distinguindo o projeto 3 como "já em camadas" e aplicando a estratégia adaptativa.
 - O gate de confirmação `[y/n]` funcionou nos 3 — nenhum arquivo foi tocado antes do `y`.
 - As transformações do playbook se traduziram bem entre linguagens (query parametrizada em SQLite Python
-  e Node; hash salgado com `werkzeug.security` e `node:crypto`; error handler do Flask e middleware do
+  e Node; hash com salt via `werkzeug.security` e `node:crypto`; error handler do Flask e middleware do
   Express).
 
 ### Verificação final de aceite (evidência principal)
