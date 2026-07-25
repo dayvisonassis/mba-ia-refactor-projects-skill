@@ -845,6 +845,10 @@ Evidência complementar, disponível em **dois formatos** (o avaliador escolhe o
 > service → model → banco). No Projeto 2 (Express) a Seção B é HTTP ao vivo por socket real; nos
 > Projetos 1 e 3 (Flask) usa o `test_client` do Flask (determinístico, sem a instabilidade de sockets
 > do Windows). As screenshots são renderizações fiéis dessas saídas reais — não são fotos de tela.
+>
+> Os três foram **regerados após a 2ª iteração da skill**, com execução nova das aplicações. O log do
+> Projeto 3 traz agora a seção `AP-13`, mostrando a cadeia de escalonamento de privilégio sendo
+> bloqueada em cada etapa.
 
 **Projeto 1 — code-smells-project (Python/Flask):**
 

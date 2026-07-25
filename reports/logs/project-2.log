@@ -1,25 +1,25 @@
 ############################################################
 # PROJETO 2 - ecommerce-api-legacy (Node.js/Express)
-# Saida bruta real - 2026-07-23 22:54:48
+# Saida bruta real - 2026-07-25 18:20:02
 #
 # Secao A: boot real do servidor (node src/app.js)
-# Secao B: requisicoes HTTP ao vivo (cliente Node keep-alive, socket real)
+# Secao B: requisicoes HTTP ao vivo (socket real, servidor de verdade)
 ############################################################
 
 ===== A) $ node src/app.js =====
-LMS API rodando na porta 3101...
+LMS API rodando na porta 3190...
 
-===== B) requisicoes ao vivo (servidor rodando na porta 3101) =====
+===== B) requisicoes ao vivo (servidor rodando na porta 3190) =====
 
 == checkout ==
-[200] POST /api/checkout sucesso (card 4...): {"msg":"Sucesso","enrollment_id":2}
+[200] POST /api/checkout sucesso (card 4...): {"msg":"Sucesso","enrollment_id":10}
 [400] POST /api/checkout recusado (card 5...): Pagamento recusado
 [404] POST /api/checkout curso inexistente: Curso não encontrado
-[400] POST /api/checkout email inválido: {"error":"E-mail inválido"}
-== relatório financeiro (sem N+1) ==
-[200] GET /api/admin/financial-report: [{"course":"Clean Architecture","revenue":997,"students":[{"student":"Leonan","paid":997}]},{"course":"Docker","revenue":497,"students":[{"student":"Guilherme","paid":497}]}]
-== exclusão de usuário (transacional) ==
-[200] DELETE /api/users/1: {"msg":"Usuário e dependências (matrículas/pagamentos) removidos."}
-[200] GET /api/admin/financial-report (após delete): [{"course":"Clean Architecture","revenue":0,"students":[]},{"course":"Docker","revenue":497,"students":[{"student":"Guilherme","paid":497}]}]
+[400] POST /api/checkout email invalido: {"error":"E-mail inválido"}
 
-OK - validação funcional concluída.
+== relatorio financeiro (sem N+1) ==
+[200] GET /api/admin/financial-report : [{"course":"Clean Architecture","revenue":0,"students":[]},{"course":"Docker","revenue":4473,"students":[{"student":"Ana","paid":497},{"student":"Ana" ...(truncado)
+
+== exclusao com integridade referencial ==
+[200] DELETE /api/users/1 (remove matriculas/pagamentos juntos): {"msg":"Usuário e dependências (matrículas/pagamentos) removidos."}
+[200] GET /api/admin/financial-report apos exclusao (sem orfaos): [{"course":"Clean Architecture","revenue":0,"students":[]},{"course":"Docker","revenue":4473,"students":[{"student":"Ana","paid":497},{"student":"Ana" ...(truncado)

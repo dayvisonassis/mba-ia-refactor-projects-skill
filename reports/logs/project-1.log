@@ -1,6 +1,6 @@
 ############################################################
 # PROJETO 1 - code-smells-project (Python/Flask)
-# Saida bruta real - 2026-07-23 22:53:31
+# Saida bruta real - 2026-07-25 15:19:28
 #
 # Secao A: boot real do servidor (python app.py)
 # Secao B: requisicoes processadas pela app via Flask test_client
@@ -10,41 +10,48 @@
 ===== A) $ python app.py =====
 ==================================================
 SERVIDOR INICIADO
-Rodando em http://127.0.0.1:5002
+Rodando em http://127.0.0.1:5090
 ==================================================
  * Serving Flask app 'src.app_factory'
  * Debug mode: off
 INFO:werkzeug:WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on http://127.0.0.1:5002
+ * Running on http://127.0.0.1:5090
 INFO:werkzeug:Press CTRL+C to quit
 
 ===== B) requisicoes ao vivo =====
 
-INFO:src.services.notification_service:Notificação (email/SMS/push): pedido 1 criado para usuário 2
-$ curl -X GET http://localhost:5000/health   # sem secret_key
-  -> HTTP 200  {"counts":{"pedidos":0,"produtos":10,"usuarios":3},"database":"connected","status":"ok","versao":"1.0.0"}
+$ curl -X GET http://localhost:5000/health   # sem secret_key na resposta
+  -> HTTP 200  {"counts":{"pedidos":6,"produtos":13,"usuarios":12},"database":"connected","status":"ok","versao":"1.0.0"}
 
-$ curl -X GET http://localhost:5000/usuarios   # sem campo senha
-  -> HTTP 200  {"dados":[{"criado_em":"2026-07-24 01:53:33","email":"admin@loja.com","id":1,"nome":"Admin","tipo":"admin"},{"criado_em":"2026-07-24 01:53:33","email":"joao@email.com","id":2,"nome":"Jo\u00e3o Silva","tipo":"cl ...(truncado)
+$ curl -X GET http://localhost:5000/produtos   # SQL parametrizado
+  -> HTTP 200  {"dados":[{"ativo":1,"categoria":"informatica","criado_em":"2026-07-25 10:27:25","descricao":"Mouse sem fio ergon\u00f4mico","estoque":50,"id":2,"nome ...(truncado)
 
-$ curl -X POST http://localhost:5000/login   # senha correta (via hash)
-  -> HTTP 200  {"dados":{"email":"joao@email.com","id":2,"nome":"Jo\u00e3o Silva","tipo":"cliente"},"mensagem":"Login OK","sucesso":true}
+$ curl -X GET http://localhost:5000/produtos/busca?q=' OR '1'='1   # payload de SQL injection tratado como texto
+  -> HTTP 200  {"dados":[],"sucesso":true,"total":0}
 
-$ curl -X POST http://localhost:5000/login   # SQL injection -> bloqueado
-  -> HTTP 401  {"erro":"Email ou senha inv\u00e1lidos","sucesso":false}
+$ curl -X POST http://localhost:5000/usuarios  -d '{"nome": "Demo", "email": "demo1785003568@x.com", "senha": "senha-forte-123"}'   # senha com hash + salt, nao retorna a senha
+  -> HTTP 201  {"dados":{"id":13},"sucesso":true}
 
-$ curl -X POST http://localhost:5000/pedidos   # transacao 2 itens
-  -> HTTP 201  {"dados":{"pedido_id":1,"total":6269.69},"mensagem":"Pedido criado com sucesso","sucesso":true}
+$ curl -X POST http://localhost:5000/login  -d '{"email": "demo1785003568@x.com", "senha": "senha-forte-123"}'   # login com hash verificado
+  -> HTTP 200  {"dados":{"email":"demo1785003568@x.com","id":13,"nome":"Demo","tipo":"cliente"},"mensagem":"Login OK","sucesso":true}
 
-$ curl -X POST http://localhost:5000/pedidos   # estoque insuficiente -> rollback (400)
-  -> HTTP 400  {"erro":"Estoque insuficiente para Cadeira Gamer","sucesso":false}
+$ curl -X POST http://localhost:5000/produtos  -d '{"nome": "Teclado", "preco": 199.9, "estoque": 5, "categoria": "eletronicos"}'   # validacao unica: valido -> 201
+  -> HTTP 201  {"dados":{"id":19},"mensagem":"Produto criado","sucesso":true}
 
-$ curl -X GET http://localhost:5000/pedidos   # listagem sem N+1 (JOIN)
-  -> HTTP 200  {"dados":[{"criado_em":"2026-07-24 01:53:33","id":1,"itens":[{"preco_unitario":5999.99,"produto_id":1,"produto_nome":"Notebook Gamer","quantidade":1},{"preco_unitario":89.9,"produto_id":2,"produto_nome":"Mouse  ...(truncado)
+$ curl -X POST http://localhost:5000/produtos  -d '{"nome": "X", "preco": -1, "estoque": 5, "categoria": "eletronicos"}'   # validacao unica: invalido -> 400
+  -> HTTP 400  {"erro":"Pre\u00e7o n\u00e3o pode ser negativo"}
 
-$ curl -X GET http://localhost:5000/relatorios/vendas   # desconto por faixa (constantes)
-  -> HTTP 200  {"dados":{"desconto_aplicavel":313.48,"faturamento_bruto":6269.69,"faturamento_liquido":5956.21,"pedidos_aprovados":0,"pedidos_cancelados":0,"pedidos_pendentes":1,"ticket_medio":6269.69,"total_pedidos":1},"suce ...(truncado)
+$ curl -X POST http://localhost:5000/pedidos  -d '{"usuario_id": 13, "itens": [{"produto_id": 19, "quantidade": 1}]}'   # regra de negocio no service + transacao
+  -> HTTP 201  {"dados":{"pedido_id":7,"total":199.9},"mensagem":"Pedido criado com sucesso","sucesso":true}
 
-$ curl -X POST http://localhost:5000/admin/query   # endpoint inseguro removido (404)
+$ curl -X GET http://localhost:5000/pedidos   # listagem sem N+1
+  -> HTTP 200  {"dados":[{"criado_em":"2026-07-25 10:52:28","id":1,"itens":[{"preco_unitario":249.9,"produto_id":1,"produto_nome":"Desconhecido","quantidade":1}],"st ...(truncado)
+
+$ curl -X GET http://localhost:5000/relatorios/vendas   # relatorio agregado
+  -> HTTP 200  {"dados":{"desconto_aplicavel":33.99,"faturamento_bruto":1699.3,"faturamento_liquido":1665.31,"pedidos_aprovados":0,"pedidos_cancelados":0,"pedidos_pe ...(truncado)
+
+$ curl -X POST http://localhost:5000/admin/query  -d '{"query": "SELECT * FROM usuarios"}'   # endpoint inseguro REMOVIDO -> 404 (era a vulnerabilidade CRITICAL)
   -> HTTP 404  {"codigo":404,"erro":"The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again."}
 
+$ curl -X POST http://localhost:5000/admin/reset-db   # reset sem auth REMOVIDO -> 404
+  -> HTTP 404  {"codigo":404,"erro":"The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again."}
