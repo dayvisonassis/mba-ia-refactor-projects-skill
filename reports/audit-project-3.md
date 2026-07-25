@@ -27,7 +27,7 @@ CRITICAL: 3 | HIGH: 2 | MEDIUM: 3 | LOW: 3   →  Total: 11
 File: models/user.py:29 (set_password), 32 (check_password)
 Description: `hashlib.md5(pwd.encode()).hexdigest()` — MD5 é quebrado e rápido de bruteforce.
 Impact: Senhas recuperáveis via rainbow tables em caso de vazamento.
-Recommendation: werkzeug.security (hash salgado). Playbook T3.
+Recommendation: werkzeug.security (hash com salt). Playbook T3.
 
 ### [CRITICAL] Senha (hash) exposta no to_dict() e propagada em rotas  (AP-03)
 File: models/user.py:16-25 (to_dict inclui 'password'); user_routes.py:33, 85, 209
@@ -71,7 +71,7 @@ Description: Regras (status, prioridade 1-5, título 3-200) repetidas; utilitár
 Impact: Inconsistência de validação; esforço triplicado.
 Recommendation: Usar process_task_data (ou schema) nas duas rotas. Playbook T9.
 
-### [LOW] `except:` "pelado" engolindo erros  (AP-11)
+### [LOW] `except:` sem tipo (bare except) engolindo erros  (AP-11)
 File: task_routes.py:62, 236; helpers.py:46-50; report_routes/user_routes com except sem tipo
 Description: except sem tipo captura tudo (inclui KeyboardInterrupt/SystemExit) e mascara a causa.
 Impact: Erros silenciados; diagnóstico quase impossível.
