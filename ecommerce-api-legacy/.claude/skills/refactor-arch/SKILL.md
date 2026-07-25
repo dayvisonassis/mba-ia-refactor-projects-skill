@@ -23,6 +23,13 @@ anti-patterns and refactor it toward clean **MVC** layering, without breaking be
   gets targeted fixes without rewriting what already works.
 - You preserve the **external contract of the original endpoints** (same paths/methods/responses).
 
+**Precedence rule — security outranks contract preservation.** The two goals above collide whenever a
+route must be hardened: adding authentication turns `200` into `401`, and removing an endpoint that
+*is* the vulnerability turns it into `404`. When they collide, **the security fix wins**. Such a
+change is correct, not a regression — but it must be **declared**: list every intentional contract
+change in the Phase 3 output, with the finding that justifies it. Never leave a route unprotected
+merely to keep its old status code.
+
 ## Objective
 
 Deliver, for the target project:
@@ -79,6 +86,18 @@ Prove the refactor didn't break the app:
   Phase 1. Exercise them (e.g. `curl`) and confirm expected status/JSON.
 - **Zero confirmed anti-patterns remain** from the report.
 
+**Authorization matrix check (mandatory whenever AP-07 or AP-13 was reported).** Responding is not
+the same as being correct — a route that answers `200` when it should answer `401` passes a liveness
+check and fails the application. So, in addition to the above:
+
+1. Emit the coverage table `resource × verb × required role` for every resource with at least one
+   protected route.
+2. For each such resource, call **every write verb with no token** and assert it is rejected
+   (`401`/`403`). A single public write verb on a resource that has any protected verb is a **failed**
+   validation — go back and fix it.
+3. For each public or self-service write route, send a payload containing each **privilege field**
+   (`role`, `active`, `owner_id`, …) and assert the stored value did not change.
+
 Report each as ✓ or ✗. If something fails, fix and re-validate before declaring done (2–4 iterations
 is normal).
 
@@ -120,13 +139,17 @@ If a phase cannot proceed (e.g. no recognizable stack, unreadable files), print 
 - [ ] Gate `[y/n]` was presented and honored (no file touched before `y`).
 - [ ] Structure follows the MVC "definition of done".
 - [ ] App boots and original endpoints respond (✓/✗ shown).
+- [ ] Authorization coverage table emitted; **no public write verb on a resource that has any
+      protected verb**; no public route accepts a privilege field (AP-07 / AP-13).
+- [ ] Every intentional contract change (route protected or removed) is listed with its justifying
+      finding.
 
 ## References Index
 
 | File | Purpose |
 |---|---|
 | `references/project-analysis.md` | Phase 1 — language/framework/DB/architecture detection heuristics + output contract. |
-| `references/anti-patterns-catalog.md` | Phase 2 — ≥12 anti-patterns with detection signals + severity, and the deprecated-APIs table. |
+| `references/anti-patterns-catalog.md` | Phase 2 — ≥13 anti-patterns with detection signals + severity, and the deprecated-APIs table. |
 | `references/report-template.md` | Phase 2 — canonical audit report format (Portuguese), ordered by severity, with the gate. |
 | `references/architecture-guidelines.md` | Phase 3 — target MVC layers, dependency rules, adaptive strategy, definition of done. |
-| `references/refactoring-playbook.md` | Phase 3 — ≥12 before/after transformations (Python + JS), each tagged `Fixes: AP-NN`. |
+| `references/refactoring-playbook.md` | Phase 3 — ≥13 before/after transformations (Python + JS), each tagged `Fixes: AP-NN`. |

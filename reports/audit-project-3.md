@@ -19,7 +19,7 @@ Stack:   Python + Flask (SQLAlchemy)
 Files:   11 analyzed | ~1158 lines of code
 
 ## Summary
-CRITICAL: 3 | HIGH: 2 | MEDIUM: 3 | LOW: 3   →  Total: 11
+CRITICAL: 4 | HIGH: 2 | MEDIUM: 3 | LOW: 3   →  Total: 12
 
 ## Findings
 
@@ -40,6 +40,12 @@ File: app.py:13 (SECRET_KEY='super-secret-key-123'); services/notification_servi
 Description: Segredos no código-fonte vazam no Git; senha de SMTP em texto puro.
 Impact: Comprometimento de sessões e da conta de e-mail.
 Recommendation: Variáveis de ambiente / secret manager. Playbook T2.
+
+### [CRITICAL] Escalonamento de privilégio por mass assignment  (AP-13)
+File: routes/user_routes.py:52,73 (POST aceita 'role'); routes/user_routes.py:120-123 (PUT aceita 'role' e 'password')
+Description: `POST /users` é público e lê `role` do corpo da requisição; `PUT /users/<id>` é público e aceita `role` e `password` de qualquer usuário. A checagem `if role not in VALID_ROLES` valida o VALOR, não autoriza a ESCRITA.
+Impact: Duas requisições bastam para virar admin — `POST /users {"role":"admin"}` seguido de `POST /login`. Isso anula toda checagem de papel do projeto: o `admin_required` do delete de usuário e o `login_required` dos relatórios deixam de valer. O PUT público permite ainda trocar a senha de um admin existente (account takeover).
+Recommendation: Allow-list de campos graváveis por papel; `role` só por rota autenticada de admin; auto-cadastro sempre com o papel padrão; PUT exige token e confere posse do registro. Playbook T13 (+ T7 para a cobertura da rota).
 
 ### [HIGH] Autenticação fake e nenhuma rota protegida  (AP-07)
 File: user_routes.py:210 ('token': 'fake-jwt-token-' + id); rotas sensíveis sem auth
@@ -95,8 +101,16 @@ Recommendation: isinstance(x, list); `return self.role == 'admin'`. Playbook T11
 - `type(x) == list` → isinstance(x, list).
 
 ================================
-Total: 11 findings
+Total: 12 findings
 ================================
 
 Phase 2 complete. Proceed with refactoring (Phase 3)? [y/n]
 > y
+
+---
+
+> **Nota — segunda iteração da skill.** Os 11 primeiros achados são da execução original. O
+> `[CRITICAL] Escalonamento de privilégio por mass assignment (AP-13)` foi acrescentado numa
+> reexecução da Fase 2 sobre o **mesmo código legado**, depois que o catálogo da skill ganhou o
+> `AP-13` e a regra de cobertura do `AP-07`. A primeira versão da skill não detectava essa classe
+> de falha — a iteração é a correção. Detalhes na seção "Desafios encontrados" do README.

@@ -1,11 +1,11 @@
 import logging
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import db
-from middlewares.auth import admin_required
+from middlewares.auth import admin_required, login_required
 from models.user import User
 from services import auth_service, task_service
 
@@ -15,6 +15,20 @@ user_bp = Blueprint('users', __name__)
 EMAIL_RE = r'^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$'
 VALID_ROLES = ('user', 'admin', 'manager')
 MIN_PASSWORD_LENGTH = 4
+DEFAULT_ROLE = 'user'
+
+# T13 — allow-list de campos graváveis pelo cliente.
+# Validar o VALOR de um campo não autoriza a ESCRITA dele: `role` só entra pela
+# lista de admin, senão qualquer anônimo emite o próprio admin (AP-13).
+SELF_WRITABLE = frozenset({'name', 'email', 'password'})
+ADMIN_WRITABLE = SELF_WRITABLE | {'role', 'active'}
+
+
+def _campos_permitidos(caller, target_id):
+    """Campos que este chamador pode gravar neste usuário."""
+    if caller.get('role') == 'admin':
+        return ADMIN_WRITABLE
+    return SELF_WRITABLE if caller.get('uid') == target_id else frozenset()
 
 
 @user_bp.route('/users', methods=['GET'])
@@ -49,7 +63,6 @@ def create_user():
     name = data.get('name')
     email = data.get('email')
     password = data.get('password')
-    role = data.get('role', 'user')
 
     if not name:
         return jsonify({'error': 'Nome é obrigatório'}), 400
@@ -63,14 +76,14 @@ def create_user():
         return jsonify({'error': 'Senha deve ter no mínimo 4 caracteres'}), 400
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email já cadastrado'}), 409
-    if role not in VALID_ROLES:
-        return jsonify({'error': 'Role inválido'}), 400
 
     user = User()
     user.name = name
     user.email = email
     user.set_password(password)
-    user.role = role
+    # T13/AP-13: auto-cadastro nunca lê `role` do payload — sempre o papel padrão.
+    # Promoção só por PUT autenticado com token de admin.
+    user.role = DEFAULT_ROLE
 
     try:
         db.session.add(user)
@@ -84,6 +97,7 @@ def create_user():
 
 
 @user_bp.route('/users/<int:user_id>', methods=['PUT'])
+@login_required
 def update_user(user_id):
     user = User.query.get(user_id)
     if not user:
@@ -93,24 +107,31 @@ def update_user(user_id):
     if not data:
         return jsonify({'error': 'Dados inválidos'}), 400
 
-    if 'name' in data:
+    # T13: o chamador só grava o que a allow-list do seu papel permite.
+    # Campos fora dela são ignorados silenciosamente (fail-closed): uma coluna
+    # nova no model não vira gravável pelo cliente por acidente.
+    permitidos = _campos_permitidos(g.current_user, user_id)
+    if not permitidos:
+        return jsonify({'error': 'Não autorizado a alterar este usuário'}), 403
+
+    if 'name' in permitidos and 'name' in data:
         user.name = data['name']
-    if 'email' in data:
+    if 'email' in permitidos and 'email' in data:
         if not re.match(EMAIL_RE, data['email']):
             return jsonify({'error': 'Email inválido'}), 400
         existing = User.query.filter_by(email=data['email']).first()
         if existing and existing.id != user_id:
             return jsonify({'error': 'Email já cadastrado'}), 409
         user.email = data['email']
-    if 'password' in data:
+    if 'password' in permitidos and 'password' in data:
         if len(data['password']) < MIN_PASSWORD_LENGTH:
             return jsonify({'error': 'Senha muito curta'}), 400
         user.set_password(data['password'])
-    if 'role' in data:
+    if 'role' in permitidos and 'role' in data:
         if data['role'] not in VALID_ROLES:
             return jsonify({'error': 'Role inválido'}), 400
         user.role = data['role']
-    if 'active' in data:
+    if 'active' in permitidos and 'active' in data:
         user.active = data['active']
 
     try:

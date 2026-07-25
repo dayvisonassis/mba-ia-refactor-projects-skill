@@ -207,12 +207,35 @@ def login_required(fn):
     return wrapper
 
 @user_bp.delete("/users/<int:id>")
-@login_required
 @admin_required
 def deletar_usuario(id): ...
 ```
+
+**Do not stop at one route.** The mistake this transformation must prevent is protecting the obvious
+verb (`DELETE`) and leaving its siblings open. Derive a **policy for the whole resource** first, then
+apply it. Write the table out before touching code:
+
+| Resource | GET | POST | PUT/PATCH | DELETE |
+|---|---|---|---|---|
+| `users` | public | public (self-signup, **no privilege fields** — see T13) | self **or** admin | admin |
+| `reports` | authenticated | — | — | — |
+| `tasks` | public | authenticated | owner or admin | owner or admin |
+
+Then apply the decorators across every row, not just the one in the example above:
+
+```python
+@user_bp.put("/users/<int:user_id>")
+@login_required                      # <- was public: this is the gap T7 used to miss
+def atualizar_usuario(user_id):
+    if g.current_user["uid"] != user_id and g.current_user["role"] != "admin":
+        return jsonify({"erro": "não autorizado"}), 403
+    ...
+```
+
 Rationale: token is signed and expiring; sensitive routes require a valid identity/role. Public
-routes stay open; clients authenticate via `/login` then send the token.
+routes stay open; clients authenticate via `/login` then send the token. **The coverage rule from
+AP-07 is the acceptance test:** no write verb on a resource may be less protected than the most
+protected write verb on that same resource.
 
 ---
 
@@ -334,3 +357,75 @@ FAIXAS_DESCONTO = [(10000, 0.10), (5000, 0.05), (1000, 0.02)]
 CATEGORIAS_VALIDAS = ["informatica", "moveis", "vestuario"]
 ```
 Rationale: named, single-sourced values communicate intent and stop duplication drift.
+
+---
+
+## T13 — Client-supplied privilege field → allow-list + authorization
+`Fixes: AP-13`
+
+The route being authenticated is **not enough**. Decide, per caller role, *which fields* the client
+may write. Everything outside the allow-list is ignored — never echoed back as an error, never
+silently applied.
+
+**Before** (Python — public route, value-validated but not authorized)
+```python
+@user_bp.route('/users', methods=['POST'])          # public
+def create_user():
+    data = request.get_json()
+    role = data.get('role', 'user')                 # <- caller picks their own role
+    if role not in VALID_ROLES:                     # validates the VALUE, authorizes NOTHING
+        return jsonify({'error': 'Role inválido'}), 400
+    user.role = role                                # POST /users {"role":"admin"} -> instant admin
+```
+**After**
+```python
+SELF_WRITABLE = {'name', 'email', 'password'}       # what any caller may set on themselves
+ADMIN_WRITABLE = SELF_WRITABLE | {'role', 'active'} # privilege fields: admin only
+
+def _allowed_fields(current_user, target_id):
+    if current_user and current_user.get('role') == 'admin':
+        return ADMIN_WRITABLE
+    return SELF_WRITABLE
+
+@user_bp.route('/users', methods=['POST'])          # stays public: self-signup
+def create_user():
+    data = request.get_json()
+    user.role = 'user'                              # forced; never read from the payload
+    ...
+
+@user_bp.route('/users/<int:user_id>', methods=['PUT'])
+@login_required                                     # T7: the route itself is protected
+def update_user(user_id):
+    caller = g.current_user
+    if caller['uid'] != user_id and caller['role'] != 'admin':
+        return jsonify({'error': 'Não autorizado'}), 403
+    data = request.get_json()
+    allowed = _allowed_fields(caller, user_id)
+    for field in set(data) & allowed:               # everything else is dropped
+        _apply(user, field, data[field])
+```
+
+**Before** (JS — spread copies whatever the client sent)
+```js
+const user = await Users.findById(req.params.id);
+Object.assign(user, req.body);        // req.body {"role":"admin"} -> escalation
+await user.save();
+```
+**After**
+```js
+const SELF_WRITABLE = ['name', 'email', 'password'];
+const ADMIN_WRITABLE = [...SELF_WRITABLE, 'role', 'active'];
+
+const allowed = req.user?.role === 'admin' ? ADMIN_WRITABLE : SELF_WRITABLE;
+for (const field of allowed) {
+    if (field in req.body) user[field] = req.body[field];   // explicit, never a spread
+}
+```
+
+Rationale: an allow-list fails closed — a new column added to the model is *not* client-writable
+until someone deliberately adds it. Ownership fields (`owner_id`, `user_id`, `tenant_id`) belong in
+the admin list for the same reason: accepting them from the payload lets a caller move another
+subject's resource to themselves.
+
+**Acceptance test:** for every public or self-service write route, send a payload containing each
+privilege field and assert the stored value did **not** change.
