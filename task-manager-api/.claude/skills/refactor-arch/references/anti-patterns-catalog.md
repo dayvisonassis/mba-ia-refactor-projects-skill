@@ -68,11 +68,37 @@ injection. → Playbook T6.
 
 ### AP-07 — Missing / fake authentication — `HIGH`
 **Detection signal:** predictable/unsigned "token" (`"fake-jwt-token-" + id`); no auth
-decorator/middleware on sensitive routes; a role check function that is defined but never called.
-**Why:** anyone can perform privileged actions (delete users, read reports) with no proof of identity.
-**Fix:** real signed token with expiry (JWT/`itsdangerous`) + an auth/authorization decorator on
-sensitive routes. → Playbook T7.
+decorator/middleware on a **sensitive route**; a role check function that is defined but never called.
+
+**A route is _sensitive_ if any of these hold — classify mechanically, do not improvise:**
+
+| # | Test | Examples |
+|---|---|---|
+| S1 | It **writes** to a resource carrying identity, permission or value | `users`, `roles`, `payments`, `invoices` |
+| S2 | It can change **authentication material** | `password`, `email`, `role`, `active`, tokens, API keys |
+| S3 | It **reads another subject's data** or aggregates across subjects | reports, full user listings, cross-tenant queries |
+
+**Coverage rule (mandatory, mechanically checkable).** Within one resource, every write verb must be
+**at least as protected** as the most protected write verb on that resource. If
+`DELETE /users/<id>` requires admin, then `POST` / `PUT` / `PATCH` on `/users*` **cannot be public**.
+A resource with a mix of protected and public writes is a finding, not a design choice.
+
+**A partial AP-07 fix is worse than no fix** — it creates false assurance in the report and in the
+reviewer's mind. Always emit the coverage table below, filled from the real routes:
+
+```
+| Resource | GET | POST | PUT/PATCH | DELETE |
+|---|---|---|---|---|
+| users    | public | admin | self+admin | admin |
+```
+
+**Why:** anyone can perform privileged actions (delete users, read reports, change someone's
+password) with no proof of identity.
+**Fix:** real signed token with expiry (JWT/`itsdangerous`) + auth/authorization decorators applied
+across the **whole** resource, per the coverage rule. → Playbook T7.
 **Seen in:** `user_routes.py:210` and unprotected routes across the project.
+**Pairs with AP-13:** protecting the route is only half the fix — also check *which fields* the route
+accepts from the client.
 
 ### AP-08 — N+1 queries — `MEDIUM`
 **Detection signal:** a DB query **inside** a `for` / `forEach` loop; per-row `.query.get()` /
@@ -110,6 +136,47 @@ deleting a parent row without removing/−cascading its children.
 deleted but their payments remain).
 **Fix:** wrap multi-step writes in an explicit transaction; FK cascade or transactional cleanup. → Playbook T4/T5 context.
 **Seen in:** `AppManager.js:37-77` (no tx on checkout), `AppManager.js:131-137` (orphan delete).
+
+### AP-13 — Privilege escalation via mass assignment — `CRITICAL`
+**Detection signal:** a **privilege field** assigned from the request payload with no authorization
+check. Grep for the field name flowing from the request body into an entity:
+
+| Stack | Signal |
+|---|---|
+| Python | `data.get('role')`, `data['role']`, `user.role = data[...]`, `Model(**data)`, `setattr(obj, k, v)` over request keys |
+| JS | `Object.assign(entity, req.body)`, `{ ...req.body }` spread into a model, `entity[k] = req.body[k]` in a loop |
+
+**Privilege fields** (treat as a checklist, not an exhaustive list): `role`, `is_admin`, `isAdmin`,
+`permissions`, `scopes`, `active`/`enabled`, `owner_id`/`user_id`/`tenant_id` (ownership
+reassignment), `verified`, and value fields on paid entities (`price`, `balance`, `status`, `credit`).
+
+**Why:** this defeats **every** role check downstream. A public `POST /users` that accepts `role`
+lets any caller mint their own admin account in one request — after which the auth decorators on
+other routes are decorative. Ownership fields are the same bug: accepting `owner_id` lets a caller
+move someone else's resource to themselves. This is OWASP API3:2023 (Broken Object Property Level
+Authorization).
+
+**Critical nuance:** validating the *value* is not authorizing the *write*. Code like
+`if data['role'] not in VALID_ROLES: return 400` looks like a guard but only checks the value is
+well-formed — it still lets an anonymous caller set `role = 'admin'`.
+
+**Scoping rule — do not over-fire.** A field is a *privilege* field only if **some access decision
+depends on it**. Ask: "if a caller sets this field freely, what check do they bypass?" If the answer
+is "none", it is an ordinary business field, not AP-13.
+
+| Case | Verdict |
+|---|---|
+| `POST /users {"role":"admin"}` and `role` gates other routes | **AP-13** — bypasses every role check |
+| `POST /tasks {"user_id": 3}` in an app with no ownership-based access control | **Not AP-13** — assigning work is the API's purpose |
+| `PUT /orders/<id> {"status":"paid"}` skipping the payment flow | **AP-13** — bypasses the payment state machine |
+
+Report it only when you can name the check that gets bypassed — and name it in the finding.
+
+**Fix:** explicit allow-list of client-writable fields per caller role; privilege fields only via an
+admin-authorized path; self-service routes verify the caller owns the record. → Playbook T13.
+**Seen in:** `user_routes.py:52,73` (public POST accepts `role`) and `user_routes.py:109-112`
+(public PUT accepts `role` and `password`) — both bypass the `admin_required` / `login_required`
+checks applied elsewhere in the same project.
 
 ---
 

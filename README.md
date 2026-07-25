@@ -468,7 +468,7 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 | Detecção de APIs deprecated | seção *Deprecated / At-risk APIs* do mesmo arquivo |
 | Playbook com ≥ 8 transformações antes/depois | **12** transformações em [refactoring-playbook.md](code-smells-project/.claude/skills/refactor-arch/references/refactoring-playbook.md) |
 | Fase 2 pausa e pede confirmação antes de modificar | gate `[y/n]` no `SKILL.md` e no rodapé dos 3 relatórios de auditoria |
-| Fase 3 valida (boot + endpoints respondendo) | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) — **56/56 PASS, 0 falhas** |
+| Fase 3 valida (boot + endpoints respondendo) | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) — **64/64 PASS, 0 falhas** |
 | Relatórios de auditoria em `reports/` (3 arquivos) | [audit-project-1.md](reports/audit-project-1.md) · [audit-project-2.md](reports/audit-project-2.md) · [audit-project-3.md](reports/audit-project-3.md) |
 | Código refatorado dos 3 projetos commitado | commits `6efb6cf` (P1), `6840987` (P2), `817473e` (P3) |
 | README com as seções A, B, C e D | **Análise Manual** · **Construção da Skill** · **Resultados** · **Como Executar** |
@@ -480,7 +480,7 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 | Fase 1 detecta a stack corretamente | ✅ | ✅ | ✅ | cabeçalho de cada relatório de auditoria |
 | Fase 2 encontra ≥ 5 findings | ✅ 13 | ✅ 11 | ✅ 11 | relatórios em `reports/` |
 | Fase 2 inclui ≥ 1 CRITICAL ou HIGH | ✅ 4C+3H | ✅ 4C+3H | ✅ 3C+2H | relatórios em `reports/` |
-| Fase 3 aplicação funciona após refatoração | ✅ 22/22 | ✅ 6/6 | ✅ 28/28 | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) |
+| Fase 3 aplicação funciona após refatoração | ✅ 22/22 | ✅ 6/6 | ✅ 36/36 | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) |
 
 > **Dois resultados que parecem falha e não são.** No Projeto 1, `POST /admin/query` e
 > `POST /admin/reset-db` respondem **404 de propósito** — esses endpoints *eram* a vulnerabilidade
@@ -575,10 +575,10 @@ com uma das áreas de conhecimento obrigatórias:
 | Arquivo | Área de conhecimento | Papel |
 |---|---|---|
 | `references/project-analysis.md` | Análise de projeto | Heurísticas de detecção (linguagem, framework, banco, arquitetura) + contrato de saída da Fase 1 |
-| `references/anti-patterns-catalog.md` | Catálogo de anti-patterns | 12 anti-patterns (`AP-01`..`AP-12`) com sinal de detecção + severidade + seção de APIs deprecated |
+| `references/anti-patterns-catalog.md` | Catálogo de anti-patterns | 13 anti-patterns (`AP-01`..`AP-13`) com sinal de detecção + severidade + seção de APIs deprecated |
 | `references/report-template.md` | Template de relatório | Formato do relatório da Fase 2 (PT), ordenado por severidade, com o gate `[y/n]` |
 | `references/architecture-guidelines.md` | Guidelines de arquitetura | Regras das camadas MVC + estratégia adaptativa |
-| `references/refactoring-playbook.md` | Playbook de refatoração | 12 transformações com código antes/depois (Python **e** JS) |
+| `references/refactoring-playbook.md` | Playbook de refatoração | 13 transformações com código antes/depois (Python **e** JS) |
 
 Escolhas principais:
 
@@ -594,7 +594,7 @@ Escolhas principais:
 
 ### Anti-patterns incluídos e por quê
 
-O catálogo tem **12 anti-patterns nas 4 severidades**, todos extraídos dos problemas reais dos 3
+O catálogo tem **13 anti-patterns nas 4 severidades**, todos extraídos dos problemas reais dos 3
 projetos-alvo (nada inventado):
 
 | ID | Anti-pattern | Severidade | Presente em |
@@ -611,6 +611,7 @@ projetos-alvo (nada inventado):
 | AP-10 | Magic numbers / listas mágicas | LOW | Projetos 1, 2 |
 | AP-11 | `print`/`console.log` como log + `except` sem tipo | LOW | Projetos 1, 3 |
 | AP-12 | Falta de transação / integridade referencial | HIGH | Projeto 2 |
+| AP-13 | Escalonamento de privilégio por mass assignment | CRITICAL | Projeto 3 |
 
 Além disso, uma seção dedicada a **APIs deprecated** cobre `hashlib.md5` para senha, `datetime.utcnow()`
 (deprecated no Python 3.12+), callbacks aninhados do `sqlite3` (vs. async/await), `type(x) == list`
@@ -639,6 +640,35 @@ cada um com o equivalente moderno recomendado.
 - **Adicionar autenticação sem quebrar as rotas.** No Projeto 3, autenticar muda o contrato de rotas
   sensíveis. Resolvi protegendo apenas as rotas realmente sensíveis (delete de usuário → admin;
   relatórios → autenticado) e validando com login → token; as rotas públicas seguem abertas.
+
+- **A correção parcial que virou a 2ª iteração da skill.** O item acima estava incompleto, e a
+  revisão do próprio entregável revelou por quê: `POST /users` era público e lia `role` do corpo da
+  requisição. Duas chamadas bastavam para virar admin — `POST /users {"role":"admin"}` seguido de
+  `POST /login` — o que anulava o `admin_required` e o `login_required` aplicados nas outras rotas.
+  `PUT /users/<id>`, também público, aceitava `password` de qualquer usuário.
+
+  A falha era **herdada** do código legado, não introduzida pela refatoração. Mas a skill declarou
+  `AP-07` corrigido, e é aí que está a lição: **uma correção parcial de segurança é pior do que
+  nenhuma**, porque produz garantia falsa no relatório e em quem lê.
+
+  Investigando *por que* a skill não pegou, encontrei cinco causas — quatro de conhecimento e uma
+  de instrução:
+
+  | # | Causa | Correção na skill |
+  |---|---|---|
+  | 1 | `AP-07` dizia "sensitive routes" sem definir o que torna uma rota sensível | Definição mecânica (3 testes) + **regra de cobertura**: nenhum verbo de escrita pode ser menos protegido que o verbo mais protegido do mesmo recurso |
+  | 2 | `T7` exemplificava **uma única rota** (`DELETE`), e o modelo reproduziu o exemplo | `T7` agora exige derivar a tabela `recurso × verbo × papel` antes de tocar no código |
+  | 3 | Mass assignment não existia no catálogo (OWASP API3:2023) | Novo **`AP-13` — CRITICAL**, com regra de escopo para não gerar falso positivo em campos de negócio legítimos |
+  | 4 | A validação da Fase 3 só provava *liveness*: rota responder 200 contava como sucesso mesmo quando 200 era a resposta errada | Nova **checagem de matriz de autorização**: todo verbo de escrita é chamado sem token e precisa ser rejeitado |
+  | 5 | **"Preserve the external contract of the original endpoints"** conflitava com endurecer autenticação — proteger uma rota muda 200 → 401 | **Regra de precedência**: segurança vence preservação de contrato, e toda mudança intencional de contrato deve ser declarada |
+
+  A causa 5 foi a mais incômoda: as outras são lacunas de conhecimento, mas essa era uma instrução
+  nossa empurrando na direção errada. A skill estava, em parte, obedecendo.
+
+  O enunciado diz que 2–4 iterações são normais. Esta foi a segunda: a skill reauditou o **mesmo
+  código legado** com o catálogo novo e encontrou o `AP-13` que a primeira versão não via —
+  elevando o Projeto 3 de 11 para 12 findings. A cadeia de ataque agora falha, comprovada no
+  [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) (Seção E do Projeto 3).
 - **Aprovação de pagamento fake (Projeto 2).** Sem gateway real, isolei a decisão em um `paymentService`
   claramente sinalizado como *stub* — corrige o acoplamento arquitetural (regra fora do controller) sem
   fingir uma cobrança real.
@@ -667,7 +697,7 @@ Relatórios completos em [reports/audit-project-1.md](reports/audit-project-1.md
 |---|---|---|---|---|---|---|
 | 1 — code-smells-project | Python/Flask | 4 | 3 | 3 | 3 | 13 |
 | 2 — ecommerce-api-legacy | Node/Express | 4 | 3 | 2 | 2 | 11 |
-| 3 — task-manager-api | Python/Flask (SQLAlchemy) | 3 | 2 | 3 | 3 | 11 |
+| 3 — task-manager-api | Python/Flask (SQLAlchemy) | 4 | 2 | 3 | 3 | 12 |
 
 Todos superam o mínimo (≥ 5 findings, ≥ 1 CRITICAL/HIGH) exigido pelos critérios de aceite.
 
@@ -754,7 +784,7 @@ A tabela tem 5 linhas para essas 3 rotas porque `/api/checkout` é exercitado em
 | DELETE | `/api/users/:id` | 200 | remove usuário **e** dependências (sem órfãos) |
 
 **Projeto 3 — `task-manager-api` · base `http://127.0.0.1:5000`**
-Contrato original: 22 rotas. **Todas as 22 preservadas**; 3 passaram a exigir autenticação.
+Contrato original: 22 rotas. **Todas as 22 preservadas**; 4 passaram a exigir autenticação.
 
 | Método | Rota | Esperado | Situação |
 |---|---|:--:|---|
@@ -764,8 +794,8 @@ Contrato original: 22 rotas. **Todas as 22 preservadas**; 3 passaram a exigir au
 | POST | `/tasks` | 201 | pública |
 | PUT · DELETE | `/tasks/<id>` | 200 | pública |
 | GET | `/users` · `/users/<id>` · `/users/<id>/tasks` | 200 | pública |
-| POST | `/users` | 201 | pública |
-| PUT | `/users/<id>` | 200 | pública |
+| POST | `/users` | 201 | pública (auto-cadastro; **`role` do payload é ignorado**) |
+| PUT | `/users/<id>` | **401** sem token · 403 para outro usuário · 200 para o próprio ou admin | 🔒 **protegida** (AP-13; `role` só por admin) |
 | GET | `/categories` | 200 | pública |
 | POST | `/categories` | 201 | pública |
 | PUT · DELETE | `/categories/<id>` | 200 | pública |
@@ -795,8 +825,8 @@ declarado antes de cada requisição:
 |---|:--:|:--:|:--:|
 | 1 — code-smells-project | ✅ 17 rotas registradas | **22/22 PASS** | 0 |
 | 2 — ecommerce-api-legacy | ✅ escutando em socket real | **6/6 PASS** | 0 |
-| 3 — task-manager-api | ✅ 22 rotas registradas | **28/28 PASS** | 0 |
-| **Total** | | **56/56 PASS** | **0** |
+| 3 — task-manager-api | ✅ 22 rotas registradas | **36/36 PASS** | 0 |
+| **Total** | | **64/64 PASS** | **0** |
 
 Além dos endpoints, o transcript verifica em runtime as correções de segurança: `SECRET_KEY` não
 aparece mais no `/health`, payload de SQL injection é tratado como texto literal, senha não retorna
@@ -843,7 +873,7 @@ Legenda: ✅ atendido nos 3 projetos.
 - [x] Relatório segue o template definido nas references
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
-- [x] Mínimo de 5 findings identificados       (13 / 11 / 11)
+- [x] Mínimo de 5 findings identificados       (13 / 11 / 12)
 - [x] Detecção de APIs deprecated incluída
 - [x] Skill pausa e pede confirmação antes da Fase 3
 
