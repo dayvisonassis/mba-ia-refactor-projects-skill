@@ -564,6 +564,12 @@ Já possui separação de camadas (`models/`, `routes/`, `services/`, `utils/`),
 
 Todos os projetos atendem ao mínimo exigido pelo desafio: ≥ 5 problemas, sendo ≥ 1 CRITICAL/HIGH, ≥ 2 MEDIUM e ≥ 2 LOW.
 
+> **Por que o Projeto 3 aparece com 12 findings na seção *Resultados*?** Esta tabela é a **análise
+> manual** — a leitura do código feita antes de construir a skill. O relatório de auditoria do
+> Projeto 3 tem um achado a mais (`[CRITICAL]` de escalonamento de privilégio), encontrado pela
+> **skill** numa segunda iteração, não por esta leitura. A divergência é proposital e está detalhada
+> em *Desafios encontrados*.
+
 ## Construção da Skill
 
 ### Decisões de design
@@ -688,10 +694,16 @@ Relatórios completos em [reports/audit-project-1.md](reports/audit-project-1.md
 [reports/audit-project-2.md](reports/audit-project-2.md) e
 [reports/audit-project-3.md](reports/audit-project-3.md).
 
-> **Nota de transparência.** Os relatórios são a saída da Fase 2 das execuções da skill. A única
-> alteração posterior foi de **redação**, para uniformizar dois termos técnicos em português
-> (*salt* e *bare except*) com o restante da documentação — nenhum achado, severidade, localização
-> ou contagem foi modificado.
+> **Nota de transparência.** Os relatórios são a saída da Fase 2 das execuções da skill, com duas
+> intervenções posteriores, ambas registradas:
+>
+> 1. **Redação:** uniformização de dois termos técnicos em português (*salt* e *bare except*) com o
+>    restante da documentação. Nenhum achado, severidade ou localização mudou.
+> 2. **Reauditoria do Projeto 3:** depois que a skill ganhou o `AP-13` (2ª iteração), a Fase 2 foi
+>    reexecutada sobre o **mesmo código legado** e encontrou um achado a mais — por isso o Projeto 3
+>    aparece aqui com **12** findings, enquanto a Análise Manual lista **11**. A diferença é
+>    intencional: o 12º (`[CRITICAL] Escalonamento de privilégio por mass assignment`) foi
+>    encontrado pela skill, não pela leitura manual. Ver *Desafios encontrados*.
 
 | Projeto | Stack | CRITICAL | HIGH | MEDIUM | LOW | Total |
 |---|---|---|---|---|---|---|
