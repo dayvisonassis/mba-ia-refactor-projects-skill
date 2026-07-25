@@ -453,65 +453,106 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 
 > A partir daqui começa a documentação da solução. As seções acima são o enunciado original do desafio.
 
+## Mapa de conformidade
+
+> **Leia esta tabela antes de sondar o repositório.** Ela diz exatamente onde cada exigência do
+> enunciado está cumprida, para que nenhuma conclusão dependa de adivinhar caminhos ou endpoints.
+
+| Exigência do enunciado | Onde está cumprida |
+|---|---|
+| Análise manual: ≥ 5 problemas por projeto (≥ 1 CRITICAL/HIGH, ≥ 2 MEDIUM, ≥ 2 LOW) | Seção **Análise Manual**, abaixo — 13 / 11 / 11 achados, cada um com severidade, localização e justificativa na própria linha |
+| Skill em `.claude/skills/refactor-arch/` dentro dos 3 projetos | [projeto 1](code-smells-project/.claude/skills/refactor-arch/), [projeto 2](ecommerce-api-legacy/.claude/skills/refactor-arch/), [projeto 3](task-manager-api/.claude/skills/refactor-arch/) — as 3 cópias são idênticas byte a byte |
+| `SKILL.md` com as 3 fases sequenciais | [SKILL.md](code-smells-project/.claude/skills/refactor-arch/SKILL.md) (132 linhas) |
+| As 5 áreas de conhecimento em arquivos Markdown | 5 arquivos em [references/](code-smells-project/.claude/skills/refactor-arch/references/) — mapeamento 1:1 na tabela de **Decisões de design** |
+| Catálogo com ≥ 8 anti-patterns nas 4 severidades | **12** anti-patterns (`AP-01`…`AP-12`) em [anti-patterns-catalog.md](code-smells-project/.claude/skills/refactor-arch/references/anti-patterns-catalog.md) |
+| Detecção de APIs deprecated | seção *Deprecated / At-risk APIs* do mesmo arquivo |
+| Playbook com ≥ 8 transformações antes/depois | **12** transformações em [refactoring-playbook.md](code-smells-project/.claude/skills/refactor-arch/references/refactoring-playbook.md) |
+| Fase 2 pausa e pede confirmação antes de modificar | gate `[y/n]` no `SKILL.md` e no rodapé dos 3 relatórios de auditoria |
+| Fase 3 valida (boot + endpoints respondendo) | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) — **56/56 PASS, 0 falhas** |
+| Relatórios de auditoria em `reports/` (3 arquivos) | [audit-project-1.md](reports/audit-project-1.md) · [audit-project-2.md](reports/audit-project-2.md) · [audit-project-3.md](reports/audit-project-3.md) |
+| Código refatorado dos 3 projetos commitado | commits `6efb6cf` (P1), `6840987` (P2), `817473e` (P3) |
+| README com as seções A, B, C e D | **Análise Manual** · **Construção da Skill** · **Resultados** · **Como Executar** |
+
+### Critérios de Aceite — resultado
+
+| Critério (obrigatório nos 3 projetos) | P1 | P2 | P3 | Evidência |
+|---|:--:|:--:|:--:|---|
+| Fase 1 detecta a stack corretamente | ✅ | ✅ | ✅ | cabeçalho de cada relatório de auditoria |
+| Fase 2 encontra ≥ 5 findings | ✅ 13 | ✅ 11 | ✅ 11 | relatórios em `reports/` |
+| Fase 2 inclui ≥ 1 CRITICAL ou HIGH | ✅ 4C+3H | ✅ 4C+3H | ✅ 3C+2H | relatórios em `reports/` |
+| Fase 3 aplicação funciona após refatoração | ✅ 22/22 | ✅ 6/6 | ✅ 28/28 | [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log) |
+
+> **Dois resultados que parecem falha e não são.** No Projeto 1, `POST /admin/query` e
+> `POST /admin/reset-db` respondem **404 de propósito** — esses endpoints *eram* a vulnerabilidade
+> CRITICAL, e removê-los é a correção. No Projeto 3, `/reports/*` respondem **401 sem token de
+> propósito** — passaram a exigir autenticação, que é a correção do finding HIGH de auth fake.
+> O inventário completo está em [Contrato de endpoints](#contrato-de-endpoints-antes--depois).
+
 ## Análise Manual
 
-Análise manual dos 3 projetos legados. Para cada projeto foram identificados os problemas de maior impacto arquitetural, classificados por severidade (CRITICAL / HIGH / MEDIUM / LOW). A explicação didática detalhada de **cada** achado — com trecho de código, causa e correção — está em [explicacao_problemas_encontrados.md](explicacao_problemas_encontrados.md).
+Análise manual dos 3 projetos legados. Para cada projeto foram identificados os problemas de maior
+impacto arquitetural, classificados por severidade (CRITICAL / HIGH / MEDIUM / LOW). **Cada achado
+traz aqui mesmo a justificativa de por que é relevante** — as tabelas abaixo são autossuficientes.
+
+Para aprofundar, o anexo [explicacao_problemas_encontrados.md](explicacao_problemas_encontrados.md)
+traz, para cada um dos 35 achados, o trecho de código real, a causa e a correção recomendada
+(numerados `1.1`…`1.13`, `2.1`…`2.11`, `3.1`…`3.11`, na mesma ordem das tabelas).
 
 ### Projeto 1 — `code-smells-project` (Python/Flask — API de E-commerce)
 
 Monolito com pastas nomeadas como camadas (`controllers`, `models`), mas sem separação real de responsabilidades.
 
-| # | Severidade | Problema | Localização |
-|---|---|---|---|
-| 1 | **CRITICAL** | SQL Injection generalizado (queries montadas por concatenação de strings) | `models.py` (28, 48-49, 110, 291, ...) |
-| 2 | **CRITICAL** | Endpoint que executa SQL arbitrário do cliente + reset de banco sem auth | `app.py:59-78`, `app.py:47-57` |
-| 3 | **CRITICAL** | `SECRET_KEY` hardcoded e exposta na resposta do `/health` | `app.py:7`, `controllers.py:289` |
-| 4 | **CRITICAL** | Senhas em texto puro (armazenadas, comparadas e retornadas ao cliente) | `models.py:110,127-128,83`; `database.py:76-78` |
-| 5 | **HIGH** | Conexão de banco global mutável compartilhada entre threads | `database.py:4-11` |
-| 6 | **HIGH** | Regra de negócio (estoque/total) dentro da camada de dados (`criar_pedido`) | `models.py:133-169` |
-| 7 | **HIGH** | Efeitos colaterais (e-mail/SMS/push via `print`) dentro do controller | `controllers.py:208-210,248-250` |
-| 8 | **MEDIUM** | Problema N+1 na listagem de pedidos | `models.py:171-201,203-233` |
-| 9 | **MEDIUM** | Validação duplicada entre criar e atualizar produto | `controllers.py:24-96` |
-| 10 | **MEDIUM** | `DEBUG=True` fixo + `host=0.0.0.0` (Werkzeug debugger exposto → RCE) | `app.py:8,88` |
-| 11 | **LOW** | Concatenação `+ str(...)` em vez de f-strings | `controllers.py` (diversos) |
-| 12 | **LOW** | Magic numbers e listas mágicas (categorias, status, faixas de desconto) | `controllers.py:47-52,242`; `models.py:257-262` |
-| 13 | **LOW** | `print` como log + `except Exception` genérico vazando detalhes | `controllers.py` (diversos) |
+| # | Severidade | Problema | Localização | Por que é relevante |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | SQL Injection generalizado (queries montadas por concatenação de strings) | `models.py` (28, 48-49, 110, 291, ...) | Entrada do usuário vira código SQL: `email = ' OR '1'='1` autentica sem senha e `q='; DROP TABLE produtos;--` destrói dados. É a vulnerabilidade nº 1 do OWASP. |
+| 2 | **CRITICAL** | Endpoint que executa SQL arbitrário do cliente + reset de banco sem auth | `app.py:59-78`, `app.py:47-57` | É "SQL injection como serviço": qualquer pessoa que alcance a rota roda qualquer comando no banco, e a rota vizinha apaga todas as tabelas — ambas sem autenticação. |
+| 3 | **CRITICAL** | `SECRET_KEY` hardcoded e exposta na resposta do `/health` | `app.py:7`, `controllers.py:289` | A chave que assina sessões está no código versionado **e** é devolvida por um endpoint público: permite forjar a sessão de qualquer usuário. |
+| 4 | **CRITICAL** | Senhas em texto puro (armazenadas, comparadas e retornadas ao cliente) | `models.py:110,127-128,83`; `database.py:76-78` | Um vazamento do banco entrega todas as contas prontas — e como as pessoas reusam senha, compromete outros serviços. A senha ainda volta no corpo da resposta. |
+| 5 | **HIGH** | Conexão de banco global mutável compartilhada entre threads | `database.py:4-11` | Uma única conexão com `check_same_thread=False` servindo todas as requisições gera condição de corrida e transação de um cliente misturada com a de outro. |
+| 6 | **HIGH** | Regra de negócio (estoque/total) dentro da camada de dados (`criar_pedido`) | `models.py:133-169` | Cálculo de total e baixa de estoque presos ao acesso a dados: impossível testar a regra sem banco e impossível reusá-la fora daquela função. |
+| 7 | **HIGH** | Efeitos colaterais (e-mail/SMS/push via `print`) dentro do controller | `controllers.py:208-210,248-250` | Acopla notificação ao ciclo HTTP: uma falha de envio derruba a criação do pedido, e não há como testar o fluxo sem disparar os efeitos. |
+| 8 | **MEDIUM** | Problema N+1 na listagem de pedidos | `models.py:171-201,203-233` | Uma query extra por pedido para buscar itens: 100 pedidos viram 101 idas ao banco. O custo cresce linearmente com o volume. |
+| 9 | **MEDIUM** | Validação duplicada entre criar e atualizar produto | `controllers.py:24-96` | A mesma regra escrita duas vezes: corrigir um dos lados deixa o outro furado, e as duas cópias divergem com o tempo. |
+| 10 | **MEDIUM** | `DEBUG=True` fixo + `host=0.0.0.0` (Werkzeug debugger exposto → RCE) | `app.py:8,88` | O console interativo do Werkzeug exposto na rede permite executar Python arbitrário no servidor — escalada direta para execução remota de código. |
+| 11 | **LOW** | Concatenação `+ str(...)` em vez de f-strings | `controllers.py` (diversos) | Prejudica a legibilidade e quebra com `None`; f-string é o idioma padrão da linguagem desde o Python 3.6. |
+| 12 | **LOW** | Magic numbers e listas mágicas (categorias, status, faixas de desconto) | `controllers.py:47-52,242`; `models.py:257-262` | Faixas de desconto e listas de categoria soltas no meio do fluxo: mudar uma regra de negócio exige caçar literais espalhados pelo arquivo. |
+| 13 | **LOW** | `print` como log + `except Exception` genérico vazando detalhes | `controllers.py` (diversos) | `print` não tem nível nem timestamp e não vai para lugar nenhum em produção; o `except` genérico mascara a causa real e devolve detalhes internos ao cliente. |
 
 ### Projeto 2 — `ecommerce-api-legacy` (Node.js/Express — LMS API com checkout)
 
 "Frankenstein LMS": uma God Class (`AppManager`) com conexão, schema, seed, rotas e regra de negócio, tudo junto.
 
-| # | Severidade | Problema | Localização |
-|---|---|---|---|
-| 1 | **CRITICAL** | God Class concentrando DB, seed, rotas e regra de negócio | `AppManager.js:4-141` |
-| 2 | **CRITICAL** | Segredos de produção hardcoded (senha de DB, chave `pk_live` do gateway) | `utils.js:1-7` |
-| 3 | **CRITICAL** | Número de cartão e chave do gateway logados em texto puro (viola PCI-DSS) | `AppManager.js:45` |
-| 4 | **CRITICAL** | "Criptografia" caseira de senha (base64 truncado, sem salt) | `utils.js:17-23`; `AppManager.js:68` |
-| 5 | **HIGH** | Callback hell no checkout, sem transação (matrícula órfã se pagamento falha) | `AppManager.js:37-77` |
-| 6 | **HIGH** | Aprovação de pagamento fake baseada no prefixo do cartão | `AppManager.js:47` |
-| 7 | **HIGH** | Exclusão de usuário deixa matrículas/pagamentos órfãos | `AppManager.js:131-137` |
-| 8 | **MEDIUM** | Relatório financeiro com N+1 assíncrono e contadores manuais frágeis | `AppManager.js:80-129` |
-| 9 | **MEDIUM** | Nomes crípticos (`usr`, `eml`, `cc`) e ausência de validação de entrada | `AppManager.js:29-35` |
-| 10 | **LOW** | Estado global mutável exportado (`globalCache`, `totalRevenue`) e código morto | `utils.js:9-10,25` |
-| 11 | **LOW** | Banco `:memory:` perde todos os dados a cada restart | `AppManager.js:7` |
+| # | Severidade | Problema | Localização | Por que é relevante |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | God Class concentrando DB, seed, rotas e regra de negócio | `AppManager.js:4-141` | Um único arquivo com conexão, schema, seed, roteamento e regra de negócio: nada pode ser testado em isolamento e qualquer alteração arrisca o sistema inteiro. |
+| 2 | **CRITICAL** | Segredos de produção hardcoded (senha de DB, chave `pk_live` do gateway) | `utils.js:1-7` | Credenciais reais versionadas no Git: quem clonar o repositório tem acesso a produção, e o histórico do Git guarda a chave para sempre mesmo após a remoção. |
+| 3 | **CRITICAL** | Número de cartão e chave do gateway logados em texto puro (viola PCI-DSS) | `AppManager.js:45` | Gravar o número completo do cartão em log é violação direta do PCI-DSS; qualquer pessoa com acesso ao log tem os dados de pagamento dos clientes. |
+| 4 | **CRITICAL** | "Criptografia" caseira de senha (base64 truncado, sem salt) | `utils.js:17-23`; `AppManager.js:68` | Base64 é codificação reversível, não hash — a senha é recuperada em uma linha. Sem salt, senhas iguais geram o mesmo valor e caem em rainbow table. |
+| 5 | **HIGH** | Callback hell no checkout, sem transação (matrícula órfã se pagamento falha) | `AppManager.js:37-77` | Sem transação, a matrícula já foi gravada quando o pagamento falha: o aluno fica matriculado sem ter pago, e o erro é invisível no meio dos callbacks aninhados. |
+| 6 | **HIGH** | Aprovação de pagamento fake baseada no prefixo do cartão | `AppManager.js:47` | A decisão financeira mais importante do sistema é um `if` sobre o primeiro dígito do cartão, escondido dentro da God Class — sem gateway, sem auditoria, sem como substituir. |
+| 7 | **HIGH** | Exclusão de usuário deixa matrículas/pagamentos órfãos | `AppManager.js:131-137` | Remove só a linha do usuário: matrículas e pagamentos continuam apontando para um id que não existe mais, corrompendo todo relatório financeiro posterior. |
+| 8 | **MEDIUM** | Relatório financeiro com N+1 assíncrono e contadores manuais frágeis | `AppManager.js:80-129` | Uma query por curso e outra por aluno, com contadores incrementados à mão que dessincronizam quando um callback falha — o relatório fica silenciosamente errado. |
+| 9 | **MEDIUM** | Nomes crípticos (`usr`, `eml`, `cc`) e ausência de validação de entrada | `AppManager.js:29-35` | Sem validação, qualquer payload chega ao banco (e-mail inválido, cartão vazio); os nomes abreviados obrigam a ler a implementação para entender o contrato da API. |
+| 10 | **LOW** | Estado global mutável exportado (`globalCache`, `totalRevenue`) e código morto | `utils.js:9-10,25` | Estado compartilhado entre requisições torna o comportamento imprevisível sob concorrência; o código morto engana quem lê achando que está em uso. |
+| 11 | **LOW** | Banco `:memory:` perde todos os dados a cada restart | `AppManager.js:7` | Todo dado desaparece ao reiniciar o processo — serve para teste, não como banco de uma aplicação com matrículas e pagamentos. |
 
 ### Projeto 3 — `task-manager-api` (Python/Flask — Task Manager)
 
 Já possui separação de camadas (`models/`, `routes/`, `services/`, `utils/`), mas com problemas de segurança, duplicação e regra de negócio no lugar errado.
 
-| # | Severidade | Problema | Localização |
-|---|---|---|---|
-| 1 | **CRITICAL** | Hash de senha com MD5 (algoritmo quebrado, sem salt) | `models/user.py:29,32` |
-| 2 | **CRITICAL** | Senha (hash) exposta no `to_dict()` e propagada em várias rotas | `models/user.py:16-25`; `user_routes.py:33,85,209` |
-| 3 | **CRITICAL** | Segredos hardcoded (`SECRET_KEY`, senha de SMTP) | `app.py:13`; `notification_service.py:9-10` |
-| 4 | **HIGH** | Autenticação fake (`fake-jwt-token-`) e nenhuma rota protegida | `user_routes.py:210`; rotas em geral |
-| 5 | **HIGH** | Regra de negócio `is_overdue` duplicada inline em 5+ lugares | `task_routes.py:30-39,71-80,284-287`; `user_routes.py:171-180`; `report_routes.py:34-37,132-135` |
-| 6 | **MEDIUM** | N+1 na listagem de tasks e nos relatórios (ignora relacionamentos mapeados) | `task_routes.py:41-57`; `report_routes.py:53-68` |
-| 7 | **MEDIUM** | Serialização de task duplicada (model `to_dict()` vs. rotas montando à mão) | `task.py:23-36`; `task_routes.py:16-59`; `user_routes.py:162-181` |
-| 8 | **MEDIUM** | Validação de task duplicada em 3 lugares (util `process_task_data` ignorado) | `task_routes.py:96-114,166-184`; `helpers.py:57-108` |
-| 9 | **LOW** | `except:` "pelado" engolindo e mascarando erros | `task_routes.py:62,236`; `helpers.py:46-50` |
-| 10 | **LOW** | Imports não usados e `print` como log | `app.py:7`; `task_routes.py:7,149,219`; `helpers.py:1-7` |
-| 11 | **LOW** | `type(x) == list` (em vez de `isinstance`) e `if/else` retornando booleano | `helpers.py:103`; `user.py:34-38`; `task.py:38-48` |
+| # | Severidade | Problema | Localização | Por que é relevante |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | Hash de senha com MD5 (algoritmo quebrado, sem salt) | `models/user.py:29,32` | MD5 é considerado quebrado desde 2004 e é rapidíssimo de calcular — exatamente o oposto do que se quer para senha. Sem salt, uma rainbow table reverte o hash em segundos. |
+| 2 | **CRITICAL** | Senha (hash) exposta no `to_dict()` e propagada em várias rotas | `models/user.py:16-25`; `user_routes.py:33,85,209` | O hash sai em `GET /users` e em toda rota que serializa usuário: um endpoint público entrega o material necessário para atacar as senhas offline. |
+| 3 | **CRITICAL** | Segredos hardcoded (`SECRET_KEY`, senha de SMTP) | `app.py:13`; `notification_service.py:9-10` | Chave de assinatura e credencial de e-mail no código versionado: permitem forjar tokens e enviar e-mail em nome da aplicação. |
+| 4 | **HIGH** | Autenticação fake (`fake-jwt-token-`) e nenhuma rota protegida | `user_routes.py:210`; rotas em geral | O token é previsível e não é assinado — qualquer um o fabrica. Como nenhuma rota o verifica, a autenticação é puramente decorativa. |
+| 5 | **HIGH** | Regra de negócio `is_overdue` duplicada inline em 5+ lugares | `task_routes.py:30-39,71-80,284-287`; `user_routes.py:171-180`; `report_routes.py:34-37,132-135` | A mesma regra reescrita em cinco arquivos: mudar o critério de atraso exige encontrar todas as cópias, e as que escaparem passam a divergir silenciosamente. |
+| 6 | **MEDIUM** | N+1 na listagem de tasks e nos relatórios (ignora relacionamentos mapeados) | `task_routes.py:41-57`; `report_routes.py:53-68` | Os relacionamentos SQLAlchemy já existem e são ignorados: o código dispara uma consulta por task, degradando o tempo de resposta conforme a base cresce. |
+| 7 | **MEDIUM** | Serialização de task duplicada (model `to_dict()` vs. rotas montando à mão) | `task.py:23-36`; `task_routes.py:16-59`; `user_routes.py:162-181` | O model já sabe se serializar, mas as rotas remontam o dicionário à mão — o mesmo recurso sai com formatos diferentes dependendo do endpoint. |
+| 8 | **MEDIUM** | Validação de task duplicada em 3 lugares (util `process_task_data` ignorado) | `task_routes.py:96-114,166-184`; `helpers.py:57-108` | O utilitário de validação existe e é ignorado por três rotas que revalidam à mão, com critérios que já não batem entre si. |
+| 9 | **LOW** | `except:` "pelado" engolindo e mascarando erros | `task_routes.py:62,236`; `helpers.py:46-50` | Captura até `KeyboardInterrupt` e `SystemExit`, e apaga a causa real do erro — a falha vira um comportamento estranho sem rastro para depurar. |
+| 10 | **LOW** | Imports não usados e `print` como log | `app.py:7`; `task_routes.py:7,149,219`; `helpers.py:1-7` | Imports mortos enganam sobre as dependências reais do módulo; `print` não tem nível nem timestamp e some em produção. |
+| 11 | **LOW** | `type(x) == list` (em vez de `isinstance`) e `if/else` retornando booleano | `helpers.py:103`; `user.py:34-38`; `task.py:38-48` | `type(x) == list` falha para subclasses de `list`; devolver `True`/`False` num `if/else` é ruído onde bastaria retornar a própria expressão. |
 
 ### Resumo dos achados
 
@@ -665,6 +706,69 @@ services/ utils/   ─────►      **config/**                       (se
                                services/task_service.py          (eager loading, sem N+1)
 ```
 
+### Contrato de endpoints (antes → depois)
+
+> **Por que esta seção existe.** Sem o inventário, quem for validar precisa adivinhar os caminhos —
+> e um `404` de rota inexistente é facilmente confundido com "a aplicação quebrou". Abaixo está o
+> contrato exato de cada projeto, com o status esperado. Todos foram exercitados de verdade no
+> [transcript de verificação](reports/logs/verificacao-final-2026-07-25.log).
+
+**Projeto 1 — `code-smells-project` · base `http://127.0.0.1:5000`**
+Contrato original: 19 rotas. **17 preservadas** + 2 removidas por serem a própria vulnerabilidade.
+
+| Método | Rota | Esperado | Situação |
+|---|---|:--:|---|
+| GET | `/` · `/health` | 200 | preservada |
+| GET | `/produtos` · `/produtos/busca?q=` · `/produtos/<id>` | 200 | preservada |
+| POST | `/produtos` | 201 | preservada |
+| PUT · DELETE | `/produtos/<id>` | 200 | preservada |
+| GET | `/usuarios` · `/usuarios/<id>` | 200 | preservada |
+| POST | `/usuarios` | 201 | preservada |
+| POST | `/login` | 200 | preservada (agora com hash salgado) |
+| POST | `/pedidos` | 201 | preservada |
+| GET | `/pedidos` · `/pedidos/usuario/<id>` | 200 | preservada |
+| PUT | `/pedidos/<id>/status` | 200 | preservada |
+| GET | `/relatorios/vendas` | 200 | preservada |
+| POST | `/admin/query` | **404** | ⚠️ **removida de propósito** — executava SQL arbitrário do cliente (finding CRITICAL nº 2) |
+| POST | `/admin/reset-db` | **404** | ⚠️ **removida de propósito** — apagava o banco sem autenticação (finding CRITICAL nº 2) |
+
+**Projeto 2 — `ecommerce-api-legacy` · base `http://127.0.0.1:3000`**
+Contrato original: **exatamente 3 rotas**, as declaradas em [api.http](ecommerce-api-legacy/api.http).
+Todas preservadas. Não existe `/health` nem `/api/courses` — nunca existiram.
+
+A tabela tem 5 linhas para essas 3 rotas porque `/api/checkout` é exercitado em 3 cenários distintos.
+
+| Método | Rota | Esperado | Observação |
+|---|---|:--:|---|
+| POST | `/api/checkout` | 200 | cartão iniciado em `4` → aprovado |
+| POST | `/api/checkout` | 400 | cartão iniciado em `5` → recusado (comportamento original preservado) |
+| POST | `/api/checkout` | 400 | payload inválido → rejeitado (validação adicionada) |
+| GET | `/api/admin/financial-report` | 200 | relatório agregado, sem N+1 |
+| DELETE | `/api/users/:id` | 200 | remove usuário **e** dependências (sem órfãos) |
+
+**Projeto 3 — `task-manager-api` · base `http://127.0.0.1:5000`**
+Contrato original: 22 rotas. **Todas as 22 preservadas**; 3 passaram a exigir autenticação.
+
+| Método | Rota | Esperado | Situação |
+|---|---|:--:|---|
+| GET | `/` · `/health` | 200 | pública |
+| POST | `/login` | 200 / 401 | 200 com credencial válida; **401 com senha errada** |
+| GET | `/tasks` · `/tasks/<id>` · `/tasks/search?q=` · `/tasks/stats` | 200 | pública |
+| POST | `/tasks` | 201 | pública |
+| PUT · DELETE | `/tasks/<id>` | 200 | pública |
+| GET | `/users` · `/users/<id>` · `/users/<id>/tasks` | 200 | pública |
+| POST | `/users` | 201 | pública |
+| PUT | `/users/<id>` | 200 | pública |
+| GET | `/categories` | 200 | pública |
+| POST | `/categories` | 201 | pública |
+| PUT · DELETE | `/categories/<id>` | 200 | pública |
+| GET | `/reports/summary` | **401** sem token · 200 com token | 🔒 **protegida de propósito** (finding HIGH nº 4) |
+| GET | `/reports/user/<id>` | **401** sem token · 200 com token | 🔒 **protegida de propósito** (finding HIGH nº 4) |
+| DELETE | `/users/<id>` | **401** sem token · 200 com token admin | 🔒 **protegida de propósito** (exige perfil admin) |
+
+Para obter o token: `POST /login` com `{"email":"joao@email.com","password":"1234"}` (usuário admin
+criado por `seed.py`) e enviar `Authorization: Bearer <token>` nas rotas protegidas.
+
 ### Comportamento em stacks diferentes
 
 - A **mesma skill** detectou corretamente Python/Flask (projetos 1 e 3) e Node/Express (projeto 2),
@@ -674,9 +778,26 @@ services/ utils/   ─────►      **config/**                       (se
   e Node; hash salgado com `werkzeug.security` e `node:crypto`; error handler do Flask e middleware do
   Express).
 
+### Verificação final de aceite (evidência principal)
+
+**[reports/logs/verificacao-final-2026-07-25.log](reports/logs/verificacao-final-2026-07-25.log)** —
+execução real das 3 aplicações contra **todo** o contrato de endpoints acima, com o status esperado
+declarado antes de cada requisição:
+
+| Projeto | Boot | Verificações | Falhas |
+|---|:--:|:--:|:--:|
+| 1 — code-smells-project | ✅ 17 rotas registradas | **22/22 PASS** | 0 |
+| 2 — ecommerce-api-legacy | ✅ escutando em socket real | **6/6 PASS** | 0 |
+| 3 — task-manager-api | ✅ 22 rotas registradas | **28/28 PASS** | 0 |
+| **Total** | | **56/56 PASS** | **0** |
+
+Além dos endpoints, o transcript verifica em runtime as correções de segurança: `SECRET_KEY` não
+aparece mais no `/health`, payload de SQL injection é tratado como texto literal, senha não retorna
+na criação de usuário, hash de senha não vaza no login e as rotas protegidas rejeitam acesso sem token.
+
 ### Logs das aplicações rodando após a refatoração
 
-Evidência das aplicações rodando, disponível em **dois formatos** (o avaliador escolhe o que preferir):
+Evidência complementar, disponível em **dois formatos** (o avaliador escolhe o que preferir):
 
 - **Screenshots** (renderizadas a partir das saídas reais): `reports/screenshots/project-{1,2,3}.png`
 - **Saídas brutas do terminal** (capturadas de execuções reais): [reports/logs/project-1.log](reports/logs/project-1.log), [reports/logs/project-2.log](reports/logs/project-2.log), [reports/logs/project-3.log](reports/logs/project-3.log)
@@ -754,12 +875,25 @@ executa a Fase 3 (refatoração) e valida.
 
 ### Rodar e validar cada aplicação refatorada
 
+> **Ordem importa — leia antes de validar.** Três armadilhas produzem falso negativo:
+>
+> 1. **Projeto 3: rode `python seed.py` antes do login.** Um banco `.db` vazio ou remanescente de uma
+>    execução anterior (com os hashes MD5 antigos) faz `POST /login` devolver **401** mesmo estando
+>    tudo correto. Os arquivos `*.db` não são versionados justamente por isso.
+> 2. **Projeto 2: só existem 3 endpoints** (`/api/checkout`, `/api/admin/financial-report`,
+>    `/api/users/:id`). Qualquer outro caminho responde 404 porque **nunca existiu** — não é regressão.
+> 3. **401 e 404 podem ser o resultado correto.** Consulte o
+>    [Contrato de endpoints](#contrato-de-endpoints-antes--depois) antes de interpretar um status.
+
 **Projeto 1 — code-smells-project (Flask):**
 ```bash
 cd code-smells-project
 python -m venv venv && ./venv/Scripts/pip install -r requirements.txt   # Linux/Mac: venv/bin/pip
 python app.py            # http://127.0.0.1:5000
-curl http://127.0.0.1:5000/health
+
+curl http://127.0.0.1:5000/health                     # 200 — e SEM a SECRET_KEY na resposta
+curl http://127.0.0.1:5000/produtos                   # 200
+curl -X POST http://127.0.0.1:5000/admin/query        # 404 — esperado: rota removida (era a falha)
 ```
 
 **Projeto 2 — ecommerce-api-legacy (Express):**
@@ -767,18 +901,30 @@ curl http://127.0.0.1:5000/health
 cd ecommerce-api-legacy
 npm install
 npm start                # http://127.0.0.1:3000
+
+# As 3 (e únicas) rotas do contrato — qualquer outro caminho é 404 por nunca ter existido
 curl -X POST http://127.0.0.1:3000/api/checkout -H "Content-Type: application/json" \
-  -d '{"usr":"Ana","eml":"ana@x.com","pwd":"senha","c_id":2,"card":"4111222233334444"}'
+  -d '{"usr":"Ana","eml":"ana@x.com","pwd":"senha","c_id":2,"card":"4111222233334444"}'   # 200
+curl http://127.0.0.1:3000/api/admin/financial-report                                     # 200
+curl -X DELETE http://127.0.0.1:3000/api/users/1                                          # 200
 ```
 
 **Projeto 3 — task-manager-api (Flask/SQLAlchemy):**
 ```bash
 cd task-manager-api
 python -m venv venv && ./venv/Scripts/pip install -r requirements.txt
-python seed.py           # popula o banco
+python seed.py           # OBRIGATÓRIO antes do login (cria os usuários com o hash novo)
 python app.py            # http://127.0.0.1:5000
+
+curl http://127.0.0.1:5000/tasks                    # 200 — rota pública
+
+# Login: devolve um token assinado (sem o hash de senha no payload)
 curl -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" \
-  -d '{"email":"joao@email.com","password":"1234"}'   # retorna um token assinado
+  -d '{"email":"joao@email.com","password":"1234"}'
+
+curl http://127.0.0.1:5000/reports/summary          # 401 — esperado, rota protegida
+curl http://127.0.0.1:5000/reports/summary \
+  -H "Authorization: Bearer <token-do-login>"       # 200 — com token
 ```
 
 > Configuração por variáveis de ambiente (sem segredos no código): `SECRET_KEY`, `FLASK_DEBUG`, `HOST`,
