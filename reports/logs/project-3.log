@@ -1,0 +1,47 @@
+############################################################
+# PROJETO 3 - task-manager-api (Python/Flask + SQLAlchemy)
+# Saida bruta real - 2026-07-23 22:54:23
+#
+# Secao A: boot real do servidor (python app.py)
+# Secao B: requisicoes processadas pela app via Flask test_client
+############################################################
+
+===== A) $ python app.py =====
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5056
+INFO:werkzeug:Press CTRL+C to quit
+
+===== B) requisicoes ao vivo (banco populado via seed.py) =====
+
+$ curl -X GET http://localhost:5000/health   # app no ar
+  -> HTTP 200  {"status":"ok","timestamp":"2026-07-24 01:54:25.687877"}
+
+$ curl -X GET http://localhost:5000/tasks   # sem N+1 (joinedload) + overdue
+  -> HTTP 200  [{"category_id":1,"category_name":"Backend","created_at":"2026-07-24 01:54:25.659196","description":"Adicionar autentica\u00e7\u00e3o real com JWT","due_date":"2026-07-21 01:54:25.654695","id":1,"over ...(truncado)
+
+$ curl -X GET http://localhost:5000/users   # sem campo password
+  -> HTTP 200  [{"active":true,"created_at":"2026-07-24 01:54:25.628666","email":"joao@email.com","id":1,"name":"Jo\u00e3o Silva","role":"admin","task_count":4},{"active":true,"created_at":"2026-07-24 01:54:25.62866 ...(truncado)
+
+$ curl -X POST http://localhost:5000/login   # token assinado (nao e fake-jwt)
+  -> HTTP 200  {"message":"Login realizado com sucesso","token":"eyJ1aWQiOjEsInJvbGUiOiJhZG1pbiJ9.amLF0Q.GNypo777Je0vHZvAhnKOCjBqhVk","user":{"active":true,"created_at":"2026-07-24 01:54:25.628666","email":"joao@ema ...(truncado)
+
+$ curl -X GET http://localhost:5000/reports/summary   # rota protegida SEM token -> 401
+  -> HTTP 401  {"error":"N\u00e3o autorizado"}
+
+$ curl -X GET  -H 'Authorization: Bearer <token>' http://localhost:5000/reports/summary   # rota protegida COM token admin -> 200
+  -> HTTP 200  {"generated_at":"2026-07-24 01:54:25.886834","overdue":{"count":2,"tasks":[{"days_overdue":3,"due_date":"2026-07-21 01:54:25.654695","id":1,"title":"Implementar autentica\u00e7\u00e3o JWT"},{"days_ove ...(truncado)
+
+$ curl -X DELETE http://localhost:5000/users/3   # delete SEM token -> 401
+  -> HTTP 401  {"error":"N\u00e3o autorizado"}
+
+$ curl -X POST http://localhost:5000/tasks   # validacao unica: valido -> 201
+  -> HTTP 201  {"category_id":null,"category_name":null,"created_at":"2026-07-24 01:54:25.892870","description":"","due_date":null,"id":11,"overdue":false,"priority":2,"status":"pending","tags":[],"title":"Task de d ...(truncado)
+
+$ curl -X POST http://localhost:5000/tasks   # validacao unica: invalido -> 400
+  -> HTTP 400  {"error":"T\u00edtulo deve ter entre 3 e 200 caracteres"}
+
+$ curl -X DELETE  -H 'Authorization: Bearer <token>' http://localhost:5000/users/3   # delete COM token admin -> 200 (transacional)
+  -> HTTP 200  {"message":"Usu\u00e1rio deletado com sucesso"}
+

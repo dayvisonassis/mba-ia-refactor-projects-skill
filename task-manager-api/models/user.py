@@ -1,6 +1,14 @@
+from datetime import UTC, datetime
+
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from database import db
-from datetime import datetime
-import hashlib
+
+
+def _utcnow():
+    """UTC atual como datetime naive (substitui datetime.utcnow, deprecated 3.12+)."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -11,28 +19,25 @@ class User(db.Model):
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default='user')
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utcnow)
 
     def to_dict(self):
+        # NÃO inclui o campo `password` (nunca deve trafegar ao cliente).
         return {
             'id': self.id,
             'name': self.name,
             'email': self.email,
-            'password': self.password,
             'role': self.role,
             'active': self.active,
-            'created_at': str(self.created_at)
+            'created_at': str(self.created_at),
         }
 
     def set_password(self, pwd):
-
-        self.password = hashlib.md5(pwd.encode()).hexdigest()
+        # Hash salgado e forte (substitui MD5).
+        self.password = generate_password_hash(pwd)
 
     def check_password(self, pwd):
-        return self.password == hashlib.md5(pwd.encode()).hexdigest()
+        return check_password_hash(self.password, pwd)
 
     def is_admin(self):
-        if self.role == 'admin':
-            return True
-        else:
-            return False
+        return self.role == 'admin'
