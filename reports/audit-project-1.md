@@ -47,7 +47,7 @@ Recommendation: Ler de os.environ; /health devolve só status. Playbook T2.
 File: models.py:127-128 (grava), models.py:110 (compara), models.py:83 (retorna senha em GET /usuarios), database.py:76-78 (seed em texto puro)
 Description: Senha nunca é hasheada; o campo `senha` é serializado na listagem de usuários.
 Impact: Vazamento direto de credenciais de todos os usuários se o banco vazar.
-Recommendation: werkzeug.security (hash salgado); nunca serializar senha. Playbook T3.
+Recommendation: werkzeug.security (hash com salt); nunca serializar senha. Playbook T3.
 
 ### [HIGH] Conexão de banco global mutável compartilhada entre threads  (AP-06)
 File: database.py:4-11

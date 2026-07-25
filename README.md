@@ -658,6 +658,11 @@ Relatórios completos em [reports/audit-project-1.md](reports/audit-project-1.md
 [reports/audit-project-2.md](reports/audit-project-2.md) e
 [reports/audit-project-3.md](reports/audit-project-3.md).
 
+> **Nota de transparência.** Os relatórios são a saída da Fase 2 das execuções da skill. A única
+> alteração posterior foi de **redação**, para uniformizar dois termos técnicos em português
+> (*salt* e *bare except*) com o restante da documentação — nenhum achado, severidade, localização
+> ou contagem foi modificado.
+
 | Projeto | Stack | CRITICAL | HIGH | MEDIUM | LOW | Total |
 |---|---|---|---|---|---|---|
 | 1 — code-smells-project | Python/Flask | 4 | 3 | 3 | 3 | 13 |

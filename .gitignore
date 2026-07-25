@@ -10,3 +10,7 @@ venv/
 # SQLite
 *.db
 instance/
+
+# Artefatos de planejamento internos (não fazem parte do entregável)
+docs/superpowers/
+.superpowers/
