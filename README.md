@@ -736,6 +736,8 @@ Contrato original: 19 rotas. **17 preservadas** + 2 removidas por serem a própr
 Contrato original: **exatamente 3 rotas**, as declaradas em [api.http](ecommerce-api-legacy/api.http).
 Todas preservadas. Não existe `/health` nem `/api/courses` — nunca existiram.
 
+A tabela tem 5 linhas para essas 3 rotas porque `/api/checkout` é exercitado em 3 cenários distintos.
+
 | Método | Rota | Esperado | Observação |
 |---|---|:--:|---|
 | POST | `/api/checkout` | 200 | cartão iniciado em `4` → aprovado |
